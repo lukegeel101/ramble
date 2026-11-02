@@ -1,0 +1,5 @@
+#!/bin/sh
+# A stand-in for whisper.cpp's whisper-cli: prints FAKE_WHISPER_TEXT and logs its arguments to FAKE_WHISPER_LOG.
+[ -n "${FAKE_WHISPER_LOG:-}" ] && printf '%s\n' "$@" > "$FAKE_WHISPER_LOG"
+echo "starting whisper (stand-in)" >&2
+printf ' %s\n' "${FAKE_WHISPER_TEXT:-}"

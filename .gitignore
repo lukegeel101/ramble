@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+config
+glossary.md
+state/
+recordings/
+models/
+dictate.log
+recorder/mic-record

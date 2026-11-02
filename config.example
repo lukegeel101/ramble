@@ -1,0 +1,38 @@
+# Ramble settings. Copy this file to config in your install folder (default ~/.ramble/config)
+# and uncomment what you need. dictate.sh reads it on every press, so changes apply at once.
+
+# The whisper.cpp model. small.en is the default; base.en is faster and less accurate.
+# RAMBLE_MODEL="$HOME/.ramble/models/ggml-base.en.bin"
+
+# Recorder: native (recorder/mic-record, the Mac's default input) or ffmpeg.
+# RAMBLE_RECORDER=native
+# The ffmpeg recorder's input; `ffmpeg -f avfoundation -list_devices true -i ""` lists the names.
+# RAMBLE_DEVICE="default"
+
+# Cleanup. 0 copies the transcript exactly as heard.
+# RAMBLE_CLEANUP=1
+# Model for `claude -p` (haiku, sonnet, opus).
+# RAMBLE_CLEANUP_MODEL=haiku
+# Instructions: cleanup (light touch, the default) or structured (reorders and numbers requests).
+# RAMBLE_PROMPT=cleanup
+# Give up on cleanup after this many seconds and copy the transcript as heard.
+# RAMBLE_CLEANUP_SECONDS=30
+# Start a parallel second attempt when the first has not answered after this many seconds.
+# RAMBLE_CLEANUP_HEDGE=8
+# Dictations shorter than this many words only get the local filler strip.
+# RAMBLE_CLEANUP_MIN_WORDS=6
+
+# Direct Anthropic API instead of claude -p: put the key on one line in this file (chmod 600).
+# RAMBLE_API_KEY_FILE="$HOME/.config/ramble/anthropic-api-key"
+# RAMBLE_API_MODEL=claude-haiku-4-5
+
+# Glossary: 0 stops sending glossary.md to the cleanup model; RAMBLE_HINT=0 stops the whisper name hint.
+# RAMBLE_GLOSSARY=1
+# RAMBLE_HINT=1
+
+# Conversation context from your newest interactive Claude Code session.
+# RAMBLE_CONTEXT=1
+# RAMBLE_CONTEXT_MESSAGES=6
+# RAMBLE_CONTEXT_CHARS=8000
+# Extra app bundle IDs that count as a terminal, comma separated.
+# RAMBLE_CONTEXT_APPS="com.example.MyTerminal"

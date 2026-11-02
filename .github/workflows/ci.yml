@@ -1,0 +1,16 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install shellcheck lua
+      - run: shellcheck dictate.sh install.sh tests/bin/whisper-cli tests/bin/pbcopy
+      - run: python3 -m py_compile cleanup.py context.py lab.py tests/bin/claude tests/fake-mic-record
+      - run: luac -p hammerspoon/ramble.lua
+      - run: swiftc -O recorder/mic-record.swift -o "$RUNNER_TEMP/mic-record"
+      - run: python3 -m unittest discover -s tests -t . -v

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keeps the tests off the real clipboard: anything that reaches pbcopy lands in FAKE_PBCOPY_FILE instead.
+cat > "${FAKE_PBCOPY_FILE:-/dev/null}"
