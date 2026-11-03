@@ -54,3 +54,13 @@ They are appended rather than prepended so the stand-ins the tests put first on 
 
 A test that checked `RAMBLE_GLOSSARY=0` by looking for `<glossary>` in the system prompt failed, because the instructions themselves refer to "the <glossary> at the end".
 Fix: the tests look for the appended block, `\n<glossary>\n`, instead.
+
+## The first push to a brand-new GitHub repository is refused by the guardrail hook
+
+The pre-push hook refuses any push to `main`, and a new, empty repository has no `main` yet to open a pull request into.
+Fix: push the first commit once with `ALLOW_PROTECTED_PUSH=1 git push -u origin main`, then make every later change on a branch through a pull request.
+
+## A `claude -p` experiment picks up your own CLAUDE.md
+
+Running a comparison prompt through plain `claude -p` loads your user-level CLAUDE.md and settings, which leaked my own working rules into a "generic" rewrite.
+Fix: pass `--setting-sources project --strict-mcp-config --tools ""` and a `--system-prompt`, run it from an empty folder, as `cleanup.py` does, so the result reflects the prompt alone.

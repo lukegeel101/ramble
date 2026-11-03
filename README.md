@@ -1,16 +1,26 @@
+<p align="center">
+  <img src="docs/images/banner.png" alt="Ramble: think out loud, paste a clean prompt. Push-to-talk dictation for AI agents, on your Mac." width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/lukegeel101/ramble/actions/workflows/ci.yml"><img src="https://github.com/lukegeel101/ramble/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
+  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS">
+  <img src="https://img.shields.io/badge/transcription-on%20device-4ade80" alt="Transcription on device">
+  <img src="https://img.shields.io/badge/cleanup-~%240.002%20a%20dictation-fb7185" alt="About $0.002 a dictation">
+</p>
+
 # Ramble
 
-Talk to AI agents the way you naturally think out loud.
+**Talk to AI agents the way you naturally think out loud.**
 Ramble turns your ums, likes, false starts and brainstorming into a clean, faithful prompt the agent can act on, without adding or dropping anything you said.
 
-I do most of my work by talking to AI agents, and I think out loud when I do it.
-I start a sentence, change my mind, circle back, and say "like" and "you know" a lot while I figure out what I actually want.
-Pasting that raw speech into an agent wastes tokens and muddies the prompt, but the usual fix of having a model "improve" it is worse: it rewrites what I meant.
-Ramble sits in between.
-I press a hotkey, ramble, press it again, and a few seconds later a cleaned-up version is pasted where I was typing.
-It takes out the noise and keeps my words, my order and every detail.
+<p align="center">
+  <img src="docs/images/before-after.png" alt="Before: a 64-word ramble with fillers struck through. After: the 48-word prompt Ramble pasted, with the hedge, constraint and afterthought kept and nothing added." width="100%">
+</p>
 
-## Before and after
+<details>
+<summary>The same example as text</summary>
 
 What I said, as the transcriber heard it:
 
@@ -18,10 +28,63 @@ What I said, as the transcriber heard it:
 
 What Ramble pasted:
 
-> I want you to look at the sign up form, the one on the pricing page, and figure out why it's double submitting. I think it's the button handler, but I'm not sure. Don't change the styling. Also check whether the same thing happens on the contact form.
+> I want you to look at the sign up form, the one on the pricing page, and figure out why it's double submitting. I think it's the button handler, but I'm not sure. Don't change the styling. Also check if the same thing happens on the contact form.
 
-The hedge ("I think... but I'm not sure"), the constraint and the afterthought all survive.
-Nothing is reordered into a numbered list and nothing is added.
+</details>
+
+## About
+
+Ramble is push-to-talk dictation for macOS, built for prompting AI agents.
+Press a hotkey in any app, talk, press it again, and a few seconds later the cleaned-up text is pasted where you were typing.
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your Mac, so the audio never leaves it, and Claude Haiku takes out the noise and nothing else.
+It is a handful of shell and Python scripts, a small Swift recorder and a Hammerspoon hotkey, and it is MIT licensed.
+
+## Why I built it
+
+I do most of my work by talking to AI agents, and I think out loud when I do it.
+I start a sentence, change my mind, circle back, and say "like" and "you know" a lot while I figure out what I actually want.
+Speaking is faster than typing, and it gets more of what's in my head into the prompt, the hedges and the "oh, and also" that I'd never bother to type.
+
+The problem is what comes out of the transcriber.
+Pasting raw speech into an agent wastes tokens and muddies the ask.
+The obvious fix, having a model "turn it into a clear prompt", turned out to be worse.
+
+<p align="center">
+  <img src="docs/images/why-not-rewrite.png" alt="Three 'make it a clear prompt' rewrites of the same ramble came back at 347, 219 and 166 words, and each decided differently whether the agent should fix the bug. Ramble's output was 48 words with only my instructions." width="100%">
+</p>
+
+I asked for one diagnosis and got back three different jobs.
+One rewrite told the agent not to touch anything, one told it to fix the bug, and one said to fix it if the fix looked small, none of which I said.
+A rewrite that changes what you meant is worse than no rewrite at all, because the agent will faithfully do the wrong thing.
+The full outputs are in [docs/why-not-rewrite.md](docs/why-not-rewrite.md).
+
+So Ramble only takes out the noise.
+My words, my order, my hedges and every detail stay.
+
+## Why it's useful
+
+- **Faster than typing, without the mess.** Talk at full speed, paste something an agent can act on.
+- **Faithful.** The cleanup is told never to summarize, reorder, add or drop anything; `lab.py` has a stronger model check that it didn't.
+- **Private.** Transcription is local; only the transcript text goes to the cleanup model.
+- **Cheap.** About $0.002 a dictation on Haiku, in Claude plan usage.
+- **Context-aware.** In a terminal or the Claude app it reads the last few messages of your Claude Code session, so "the second option" or "that PR" come out precise.
+- **Gets your names right.** A glossary of people, projects and tools fixes the words whisper always mishears.
+- **Never loses what you said.** If cleanup fails or is slow, the raw transcript is pasted instead, and one hotkey copies the last raw transcript at any time.
+
+<p align="center">
+  <img src="docs/images/menu-bar.png" alt="Menu bar states: idle, recording, working, pasted" width="100%">
+</p>
+
+## How I use it
+
+Ramble is how I write almost every prompt now.
+I press Control+Option+., talk through what I want the way I'd explain it to a colleague, and let it paste into Claude Code, the Claude app, or wherever my cursor is.
+For quick replies it's a sentence or two; for a new task it's often a minute of thinking out loud, and the agent gets all of it, minus the ums.
+
+The nerdiest bug I hit along the way: ffmpeg was quietly dropping about one in seven audio buffers on my Mac.
+Over 159 dictations the audio came out a median 4 seconds shorter than what I said, so the transcriber never heard some of my words.
+The small native Swift recorder in `recorder/` fixed it: a 20-second recording now keeps 19.9 seconds.
+The details are in [docs/gotchas.md](docs/gotchas.md).
 
 ## What it does
 
@@ -41,7 +104,7 @@ You need macOS, [Homebrew](https://brew.sh), the Xcode Command Line Tools, and [
 ```sh
 brew install whisper-cpp ffmpeg
 brew install --cask hammerspoon
-git clone <this repository> ramble
+git clone https://github.com/lukegeel101/ramble.git
 cd ramble
 ./install.sh
 ```
@@ -115,15 +178,16 @@ Rewrites with the same words as the transcript pass without a model call.
 
 ## How it works
 
-```
-Hammerspoon hotkey ──▶ dictate.sh ──▶ recorder/mic-record ──▶ whisper-cli (local, Metal)
-                           │                                        │
-                           ├── context.py (newest Claude Code session, in parallel)
-                           │                                        ▼
-                           └──────────────▶ cleanup.py ──▶ claude -p --model haiku (or the API)
-                                                │
-                                                ▼
-                                     clipboard ──▶ Command+V
+```mermaid
+flowchart LR
+    H["Hammerspoon<br/>hotkey"] --> D["dictate.sh"]
+    D --> M["recorder/mic-record<br/>(native Swift)"]
+    M --> W["whisper-cli<br/>(local, Metal)"]
+    D -. "in parallel" .-> X["context.py<br/>newest Claude Code session"]
+    W --> C["cleanup.py"]
+    X --> C
+    C --> L["claude -p --model haiku<br/>(or the API)"]
+    L --> P["clipboard + Command+V"]
 ```
 
 - `dictate.sh` is the whole pipeline (`toggle`, `start`, `stop`, `status`, `raw`); a lock makes a press during transcription answer "busy" instead of starting over.
