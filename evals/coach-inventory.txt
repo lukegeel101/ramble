@@ -1,0 +1,9 @@
+skill: ui-ux-pro-max - UI and UX design intelligence: layout, typography, color, spacing, accessibility and visual polish for pages, components and design systems.
+skill: social-media-content - Draft and review social media posts and paired visuals, with brand voice and platform conventions.
+skill: deploy-site - Deploy the website to production.
+skill: pdf - Read, create and edit PDF files.
+skill: gmail-triage - Sort and summarize an email inbox.
+command: review - Review the current code changes for bugs.
+tool: canva - Create and edit designs in Canva.
+tool: linear - Read and write Linear issues.
+file: docs/brand-guide.md

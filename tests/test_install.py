@@ -28,8 +28,8 @@ class Install(unittest.TestCase):
 
     def test_layout_and_hammerspoon(self):
         self.install()
-        for name in ("dictate.sh", "cleanup.py", "context.py", "lab.py", "config", "glossary.md",
-                     "prompts/cleanup.md", "prompts/cleanup-structured.md", "prompts/meaning.md"):
+        for name in ("dictate.sh", "cleanup.py", "context.py", "coach.py", "lab.py", "config", "glossary.md",
+                     "prompts/cleanup.md", "prompts/cleanup-structured.md", "prompts/meaning.md", "prompts/coach.md", "evals/coach.json"):
             self.assertTrue((self.dest / name).exists(), name)
         self.assertTrue(os.access(self.dest / "dictate.sh", os.X_OK))
         init = (self.hs / "init.lua").read_text()

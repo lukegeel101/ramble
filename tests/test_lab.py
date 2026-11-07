@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 from tests.helpers import ROOT, InstallCase
 
@@ -45,6 +46,11 @@ class Cli(InstallCase):
                      FAKE_CLAUDE_MEANING=json.dumps({"issues": [issue]}))
         self.assertIn('major added: "" -> "and deploy it"', p.stdout)
 
+    def test_meaning_check_starts_claude_outside_the_install_folder(self):
+        log = self.tmp / "cwd.txt"
+        self.lab("check", *self.files("check the build", "Deploy it."), FAKE_CLAUDE_CWD_LOG=str(log))
+        self.assertEqual(Path(log.read_text().strip()).name, "ramble-empty")
+
     def test_unreadable_answer_is_an_error(self):
         p = self.lab("check", *self.files("check the build", "Deploy it."), "--json", FAKE_CLAUDE_MEANING="sorry")
         self.assertEqual(p.returncode, 1)
@@ -59,6 +65,14 @@ class Cli(InstallCase):
         strip = next(v for v in result["cleanups"] if v["key"] == "strip")
         self.assertEqual(strip["score"]["wer"], 0.0)
         self.assertIn("meaning", result["cleanups"][0])
+
+    def test_coach_eval_passes_and_fails(self):
+        # The fake answers the same for every case, so silent cases pass and suggest cases fail, and it says so.
+        p = self.lab("coach", "--runs", "1")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("should have suggested something", p.stdout)
+        self.assertIn("run 1: ok", p.stdout)
+        self.assertRegex(p.stdout, r"\d+ of \d+ runs passed")
 
     def test_last_needs_a_dictation(self):
         self.assertEqual(self.lab("last").returncode, 1)

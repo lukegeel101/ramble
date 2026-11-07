@@ -6,6 +6,7 @@
                                                                           then compare the cleanups
     lab.py check TRANSCRIPT_FILE REWRITE_FILE [--context F] [--json]     meaning check of one rewrite
     lab.py last [--json]                                                  meaning check of the last dictation
+    lab.py coach [--runs N] [--model M] [--json]                          run the coach on evals/coach.json with the real model
     lab.py sentences                                                      test sentences to read aloud
 
 Cleanup variants: the live instructions, the same again (Haiku is not deterministic), the structured instructions,
@@ -25,8 +26,11 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+
+import cleanup as cleanup_module
 
 HERE = Path(__file__).resolve().parent
 STATE = HERE / "state"
@@ -177,7 +181,7 @@ def meaning(raw, out, context_file=None):
         p = subprocess.run(["claude", "-p", "--model", JUDGE_MODEL, "--tools", "", "--no-session-persistence",
                             "--setting-sources", "project", "--strict-mcp-config", "--system-prompt", system,
                             "--output-format", "text"],
-                           input=body, capture_output=True, text=True, timeout=120, cwd=HERE, env=ENV)
+                           input=body, capture_output=True, text=True, timeout=120, cwd=cleanup_module.neutral_dir(), env=ENV)
     except subprocess.TimeoutExpired:
         return {"issues": [], "ms": ms_since(t0), "error": "the meaning check took longer than 120 s", "model": JUDGE_MODEL}
     except OSError as error:
@@ -239,6 +243,55 @@ def run_text(raw, context_file=None, ref=""):
             "cleanups": cleanup_variants(raw, context_file, ref), "ref": ref}
 
 
+# ---- coach evals ---------------------------------------------------------------------------------------------------
+
+def coach_once(case, model=None):
+    """One real coach call on one eval case: the block it would paste, and what is wrong with it."""
+    inventory = "evals/coach-inventory.txt" if case.get("inventory", True) else "evals/coach-inventory-empty.txt"
+    env = {**ENV, "RAMBLE_COACH_INVENTORY": str(HERE / inventory), "RAMBLE_GLOSSARY": "0",
+           "RAMBLE_COACH_SECONDS": "60", "RAMBLE_CLEANUP_HEDGE": "60"}
+    if model:
+        env["RAMBLE_COACH_MODEL"] = model
+    with tempfile.NamedTemporaryFile("w", suffix=".txt") as ctx:
+        ctx.write(case.get("context", ""))
+        ctx.flush()
+        p = subprocess.run([sys.executable, str(HERE / "coach.py"), "run", ctx.name], input=case["said"], capture_output=True,
+                           text=True, env=env, timeout=120)
+    block = p.stdout.strip()
+    problems = []
+    if case["expect"] == "silent" and block:
+        problems.append("should have stayed silent")
+    if case["expect"] == "suggest" and not block:
+        problems.append("should have suggested something")
+    if case.get("use_one_of") and not any(f"`{n}`" in block for n in case["use_one_of"]):
+        problems.append(f"named none of {case['use_one_of']}")
+    if case.get("never") and re.search(case["never"], block, re.I):
+        problems.append(f"matched what it must never say: {case['never']}")
+    return {"block": block, "problems": problems}
+
+
+def run_coach(runs, model):
+    cases = json.loads(read(HERE / "evals/coach.json"))
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [(case, [pool.submit(coach_once, case, model) for _ in range(runs)]) for case in cases]
+        return [{"said": case["said"], "expect": case["expect"], "runs": [f.result() for f in results]}
+                for case, results in futures]
+
+
+def show_coach(results):
+    lines, bad = [], 0
+    total = sum(len(r["runs"]) for r in results)
+    for r in results:
+        lines.append(f"## {r['said']} (expect {r['expect']})")
+        for i, run in enumerate(r["runs"], 1):
+            bad += bool(run["problems"])
+            lines.append(f"run {i}: " + ("FAIL " + "; ".join(run["problems"]) if run["problems"] else "ok"))
+            lines.append(run["block"] or "(silent)")
+        lines.append("")
+    lines.append(f"{total - bad} of {total} runs passed")
+    return "\n".join(lines) + "\n", bad
+
+
 # ---- output --------------------------------------------------------------------------------------------------------
 
 def show_meaning(m, indent="  "):
@@ -278,6 +331,11 @@ def main(argv):
     if cmd == "sentences":
         print("\n".join(SENTENCES))
         return 0
+    if cmd == "coach":
+        results = run_coach(int(option(argv, "--runs") or 3), option(argv, "--model"))
+        text, bad = show_coach(results)
+        sys.stdout.write(json.dumps(results) + "\n" if as_json else text)
+        return 1 if bad else 0
     if cmd in ("compare", "audio") and len(argv) > 2:
         result = run_audio(Path(argv[2]), ctx, ref) if cmd == "audio" else run_text(read(argv[2]).strip(), ctx, ref)
         sys.stdout.write(json.dumps(result) + "\n" if as_json else show(result))

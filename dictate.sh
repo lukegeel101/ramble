@@ -7,6 +7,7 @@
 #
 # The cleanup step sends the transcript text, never the audio, to Claude through cleanup.py.
 # If cleanup fails or is turned off, the transcript is copied as heard.
+# With RAMBLE_COACH=1, labelled suggestions from coach.py go below the text when an agent is the target.
 # `raw` copies the transcript of the last dictation as heard.
 # The last recording is kept at recordings/last.wav for a re-run; earlier ones are deleted.
 #
@@ -27,6 +28,8 @@ CLEANUP_SECONDS="${RAMBLE_CLEANUP_SECONDS:-30}"
 CLEANUP_MIN_WORDS="${RAMBLE_CLEANUP_MIN_WORDS:-6}" # shorter dictations only get the local filler strip
 HINT="${RAMBLE_HINT:-1}"                           # 0: whisper without the glossary's name hint
 CONTEXT="${RAMBLE_CONTEXT:-1}"                     # 0: clean up without the conversation's last messages
+COACH="${RAMBLE_COACH:-0}"                         # 1: add labelled suggestions below your words; see coach.py
+COACH_SECONDS="${RAMBLE_COACH_SECONDS:-20}"
 RECORDER="${RAMBLE_RECORDER:-native}"              # native (recorder/mic-record) or ffmpeg
 THREADS="${RAMBLE_THREADS:-4}"
 PYTHON="${RAMBLE_PYTHON:-/usr/bin/python3}"
@@ -34,6 +37,7 @@ PIDFILE="$STATE/recorder.pid"; WAVPATH="$STATE/wav.path"; LOCK="$STATE/lock"
 # Appended, not prepended: Hammerspoon starts tasks with a bare PATH, and tests put stand-ins first.
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
 export RAMBLE_CLEANUP_SECONDS="$CLEANUP_SECONDS"
+export RAMBLE_COACH_SECONDS="$COACH_SECONDS"
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 
@@ -125,6 +129,10 @@ stop() {
   local ctx="$STATE/context.txt" ctxpid=""
   : > "$ctx"
   if [ "$CONTEXT" = "1" ]; then "$PYTHON" "$HERE/context.py" > "$ctx" 2>>"$LOG" & ctxpid=$!; fi
+  # Coaching only goes where an agent will read it, judged by the app in front now, not after whisper has run.
+  local coachtarget="$STATE/coach-target" targetpid=""
+  rm -f "$coachtarget"
+  if [ "$COACH" = "1" ]; then ( "$PYTHON" "$HERE/coach.py" target 2>>"$LOG" && : > "$coachtarget" ) & targetpid=$!; fi
   # whisper-cli prints about eight lines of start-up per run; they reach the log only when a run fails.
   local werr="$STATE/whisper.err" hint=()
   [ "$HINT" = "1" ] && hint=(--prompt "$("$PYTHON" "$HERE/cleanup.py" hint 2>/dev/null)")
@@ -139,25 +147,66 @@ stop() {
   words="$(printf '%s' "$text" | wc -w | tr -d ' ')"
   [ -n "$ctxpid" ] && wait "$ctxpid"
   cp "$ctx" "$STATE/last-context.txt" 2>/dev/null
+  [ -n "$targetpid" ] && wait "$targetpid"
+  rm -f "$STATE/last-coach.txt"
+  coach_start "$text" "$ctx"
   if [ "$CLEANUP" = "1" ] && [ "$words" -ge "$CLEANUP_MIN_WORDS" ]; then
     local clean
     if clean="$(cleanup "$text" "$ctx")"; then
       printf '%s' "$clean" > "$STATE/last-clean.txt"
-      printf '%s' "$clean" | copy
+      coach_add "$clean"
+      printf '%s' "$COACHED" | copy
       log "cleaned ${#text} -> ${#clean} chars and copied (context $(wc -c < "$ctx" | tr -d ' ') chars)"
-      echo "COPIED: $clean"
+      echo "COPIED: $COACHED"
       return
     fi
-    printf '%s' "$text" | copy
+    coach_add "$text"
+    printf '%s' "$COACHED" | copy
     log "cleanup failed; copied raw ${#text} chars"
-    echo "RAW: $text"
+    echo "RAW: $COACHED"
     return
   fi
   # Too short for the model (or cleanup off): still take out "um", "okay so" and the like, locally.
   [ "$CLEANUP" = "1" ] && text="$(printf '%s' "$text" | "$PYTHON" "$HERE/cleanup.py" strip)"
-  printf '%s' "$text" | copy
+  coach_add "$text"
+  printf '%s' "$COACHED" | copy
   log "copied ${#text} chars"
-  echo "COPIED: $text"
+  echo "COPIED: $COACHED"
+}
+
+# Asks coach.py for suggestions alongside the cleanup, so the two calls take no longer than the slower one.
+# Runs only when RAMBLE_COACH=1 chose an agent as the target. A plain reply never gets here, so it stays instant.
+COACHPID=""; COACHOUT=""; COACH_BEGAN=0
+coach_start() {
+  COACHPID=""
+  [ -e "$STATE/coach-target" ] || return 0
+  printf '%s' "$1" | "$PYTHON" "$HERE/coach.py" wanted || return 0
+  COACHOUT="$STATE/coach.txt"
+  : > "$COACHOUT"
+  COACH_BEGAN=$SECONDS
+  ( printf '%s' "$1" | "$PYTHON" "$HERE/coach.py" run "$2" > "$COACHOUT" 2>>"$LOG" ) &
+  COACHPID=$!
+}
+
+# Sets COACHED to the text followed by any suggestions. The text is never changed and never waits past the limit:
+# a slow or failed coach call only means no suggestions. It sets a variable instead of printing because a $(...)
+# subshell could not `wait` for COACHPID.
+coach_add() {
+  COACHED="$1"
+  [ -n "$COACHPID" ] || return 0
+  while kill -0 "$COACHPID" 2>/dev/null && [ $((SECONDS - COACH_BEGAN)) -lt $((COACH_SECONDS + 2)) ]; do sleep 0.1; done
+  if kill -0 "$COACHPID" 2>/dev/null; then
+    pkill -P "$COACHPID" 2>/dev/null; kill "$COACHPID" 2>/dev/null
+    log "coach timed out after ${COACH_SECONDS}s; copied without suggestions"
+    COACHPID=""
+    return 0
+  fi
+  wait "$COACHPID" 2>/dev/null
+  COACHPID=""
+  [ -s "$COACHOUT" ] || { log "coach had no suggestions"; return 0; }
+  cp "$COACHOUT" "$STATE/last-coach.txt"
+  COACHED="$1"$'\n\n'"$(cat "$COACHOUT")"
+  log "coach added $(($(wc -l < "$COACHOUT") )) suggestions"
 }
 
 # Rewrites a transcript with cleanup.py. $2 is an optional file with the last messages of the

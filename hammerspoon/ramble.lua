@@ -68,8 +68,11 @@ local function toggle()
     elseif out:find("^COPIED: ") then
       setIdle()
       local text = out:sub(9)
-      if autopaste() then hs.alert.show("Pasted\n" .. preview(text), 2)
-      else hs.alert.show("Copied. Press Command+V\n" .. preview(text), 2.5) end
+      -- With suggestions, say so: they are worth a look before sending, and easy to delete.
+      local coached = text:find("Suggestions Ramble added", 1, true) ~= nil
+      local note = coached and " with suggestions below. Review them before sending" or ""
+      if autopaste() then hs.alert.show("Pasted" .. note .. "\n" .. preview(text), coached and 4 or 2)
+      else hs.alert.show("Copied" .. note .. ". Press Command+V\n" .. preview(text), coached and 4 or 2.5) end
     elseif out:find("^RAW: ") then
       setIdle()
       local text = out:sub(6)
