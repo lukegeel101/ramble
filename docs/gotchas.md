@@ -63,4 +63,35 @@ Fix: push the first commit once with `ALLOW_PROTECTED_PUSH=1 git push -u origin 
 ## A `claude -p` experiment picks up your own CLAUDE.md
 
 Running a comparison prompt through plain `claude -p` loads your user-level CLAUDE.md and settings, which leaked my own working rules into a "generic" rewrite.
-Fix: pass `--setting-sources project --strict-mcp-config --tools ""` and a `--system-prompt`, run it from an empty folder, as `cleanup.py` does, so the result reflects the prompt alone.
+Fix: pass `--setting-sources project --strict-mcp-config --tools ""` and a `--system-prompt`, and run it from an empty folder outside your home, so the result reflects the prompt alone.
+
+## `--setting-sources project` still reads AGENTS.md and CLAUDE.md from parent folders
+
+`claude` looks for instruction files in the folder it starts in and every parent.
+`cleanup.py` and `lab.py` used to start it in the install folder, `~/.ramble`, whose parent is your home, so a `~/AGENTS.md` or `~/CLAUDE.md` went along with every dictation.
+Coach evals exposed it when a suggestion told the agent to "write it in Luke's first-person voice", a line from my personal instructions.
+Asking `claude` from each folder confirmed it: under home it quoted that file, from an empty folder outside home it found nothing, and one call dropped from 7,504 input tokens to 634, which is most of what the README once called fixed overhead.
+Fix: `cleanup.neutral_dir()` starts `claude` in an empty folder in the system temp directory, and tests check that no instruction file is above it.
+Over 20 runs each, the cleanup's speed and its rate of leftover fillers did not meaningfully change (median 10.3 s and 5 of 20 before, 10.4 s and 6 of 20 after).
+
+## Coach suggestions must not reach other people
+
+Ramble pastes into any app, so without a check a suggestion meant for an agent would land in a Slack message or an email.
+A terminal is not safe either: with no agent running, it could paste into a shell.
+Fix: `coach.py target` runs at the stop press and allows only the Claude app, apps in `RAMBLE_COACH_APPS`, and terminals with a live Claude Code session.
+
+## A coach model names things where no check can see them
+
+Told to list skills and files in their own fields, Haiku still sometimes wrote a path into a free-text sentence, where the check on those fields could not see it.
+Fix: code writes the sentences that name things, using only names from the inventory, and `render` drops any free-text suggestion that names a skill, plugin, MCP server or file.
+It also drops "if you can't find one, ask me" when the same block names the file, which Haiku kept writing despite the instructions.
+
+## A passing eval can hide a bad answer
+
+The first coach evals passed 36 of 36 while saying "make the page mobile-friendly" and repeating lines from my personal instructions, because they only checked for the words I had thought to forbid.
+Fix: read the outputs as well as the score, and add what you find to `evals/coach.json`; the evals now cover added requirements, and someone with no skills installed.
+
+## `dictate.sh` cannot wait on the coach from inside `$(...)`
+
+A command substitution runs in a subshell, and a subshell cannot `wait` for a background job its parent started.
+Fix: `coach_add` sets `COACHED` instead of printing, and is called directly.

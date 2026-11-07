@@ -49,9 +49,10 @@ if [ "${RAMBLE_SKIP_CHECKS:-0}" != "1" ]; then
 fi
 
 say "Installing into $DEST"
-mkdir -p "$DEST/prompts" "$DEST/recorder" "$DEST/models" "$DEST/state" "$DEST/recordings"
-install -m 755 "$SRC/dictate.sh" "$SRC/cleanup.py" "$SRC/context.py" "$SRC/lab.py" "$DEST/"
+mkdir -p "$DEST/prompts" "$DEST/evals" "$DEST/recorder" "$DEST/models" "$DEST/state" "$DEST/recordings"
+install -m 755 "$SRC/dictate.sh" "$SRC/cleanup.py" "$SRC/context.py" "$SRC/coach.py" "$SRC/lab.py" "$DEST/"
 install -m 644 "$SRC"/prompts/*.md "$DEST/prompts/"
+install -m 644 "$SRC"/evals/* "$DEST/evals/"
 install -m 644 "$SRC/recorder/mic-record.swift" "$DEST/recorder/"
 install -m 644 "$SRC/config.example" "$SRC/glossary.example.md" "$DEST/"
 [ -f "$DEST/config" ] || cp "$SRC/config.example" "$DEST/config"
@@ -95,4 +96,5 @@ Done. Next:
   2. Press Control+Option+. and allow microphone access for Hammerspoon when macOS asks.
   3. For auto-paste, allow Hammerspoon under System Settings, Privacy & Security, Accessibility.
   4. Put your own names in $DEST/glossary.md and settings in $DEST/config.
+  5. New to AI agents? Add RAMBLE_COACH=1 to $DEST/config for suggestions below vague requests.
 EOF

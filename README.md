@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS">
   <img src="https://img.shields.io/badge/transcription-on%20device-4ade80" alt="Transcription on device">
-  <img src="https://img.shields.io/badge/cleanup-~%240.002%20a%20dictation-fb7185" alt="About $0.002 a dictation">
+  <img src="https://img.shields.io/badge/cleanup-under%20%240.001%20a%20dictation-fb7185" alt="Under $0.001 a dictation">
 </p>
 
 # Ramble
@@ -65,11 +65,12 @@ My words, my order, my hedges and every detail stay.
 
 - **Faster than typing, without the mess.** Talk at full speed, paste something an agent can act on.
 - **Faithful.** The cleanup is told never to summarize, reorder, add or drop anything; `lab.py` has a stronger model check that it didn't.
-- **Private.** Transcription is local; only the transcript text goes to the cleanup model.
-- **Cheap.** About $0.002 a dictation on Haiku, in Claude plan usage.
+- **Private.** Transcription is local; only the transcript text goes to the cleanup model, and none of your own instruction files.
+- **Cheap.** Under $0.001 a dictation on Haiku, in Claude plan usage.
 - **Context-aware.** In a terminal or the Claude app it reads the last few messages of your Claude Code session, so "the second option" or "that PR" come out precise.
 - **Gets your names right.** A glossary of people, projects and tools fixes the words whisper always mishears.
 - **Never loses what you said.** If cleanup fails or is slow, the raw transcript is pasted instead, and one hotkey copies the last raw transcript at any time.
+- **Helps if you're new to agents.** Optional coach mode adds labelled suggestions below vague requests, naming skills you really have. See [Coach mode](#coach-mode).
 
 <p align="center">
   <img src="docs/images/menu-bar.png" alt="Menu bar states: idle, recording, working, pasted" width="100%">
@@ -95,6 +96,7 @@ The details are in [docs/gotchas.md](docs/gotchas.md).
 - **Knows the conversation.** When you dictate into a terminal or the Claude app, the last few messages of your newest Claude Code session go along as reference, so "the second option" or "that PR" come out precise.
 - **Learns your names.** A glossary of people, projects and tools biases whisper toward the right spellings and lets the cleanup fix what is left.
 - **Never loses what you said.** If cleanup fails or is slow, the transcript is pasted as heard; Control+Option+Shift+. copies the last raw transcript at any time.
+- **Coaches you, if you ask.** With `RAMBLE_COACH=1`, a vague request to an agent gets labelled suggestions below your words: the skills you have that fit, your brand documents, and what to ask you.
 - **A test bench.** `lab.py` runs a transcript through every variant of the pipeline and has a stronger model check whether the cleanup changed your meaning.
 
 ## Quick start
@@ -134,6 +136,12 @@ The ones that matter most:
 | `RAMBLE_CONTEXT` | `1` | `0` cleans up without the conversation's last messages |
 | `RAMBLE_GLOSSARY`, `RAMBLE_HINT` | `1` | `0` leaves the glossary out of cleanup, or the name hint out of whisper |
 | `RAMBLE_API_KEY_FILE` | `~/.config/ramble/anthropic-api-key` | Call the API directly when this file exists |
+| `RAMBLE_COACH` | `0` | `1` adds labelled suggestions below vague requests to an agent; see [Coach mode](#coach-mode) |
+| `RAMBLE_COACH_MODEL` | `haiku` | Model for the suggestions |
+| `RAMBLE_COACH_SECONDS` | `20` | Paste without suggestions when they have not arrived after this long |
+| `RAMBLE_COACH_MIN_WORDS` | `2` | Shorter dictations get no suggestions |
+| `RAMBLE_COACH_APPS` | | Bundle IDs that always count as an agent, comma separated |
+| `RAMBLE_SKILL_DIRS` | | More folders of skills to choose from, colon separated |
 
 `install.sh` itself reads `RAMBLE_HOME` (default `~/.ramble`), `RAMBLE_MODEL_NAME` (default `ggml-small.en.bin`) and `HAMMERSPOON_DIR` (default `~/.hammerspoon`).
 To change the hotkeys, edit the top of `~/.hammerspoon/ramble.lua`; to turn off auto-paste, create a file named `no-autopaste` in the install folder.
@@ -156,10 +164,33 @@ It runs while whisper transcribes, so it adds no wait, and the prompt forbids co
 By default cleanup runs `claude -p` with no tools, no MCP servers, no hooks and no saved session, which uses your Claude plan and usually takes a few seconds, most of it Claude Code starting up.
 If `~/.config/ramble/anthropic-api-key` exists (one line, the key, `chmod 600`), cleanup calls the Anthropic API directly instead: about 1 second, billed to that key.
 
+### Coach mode
+
+If you're new to AI agents, it's hard to know what to ask for.
+You say "make them better"; someone experienced names the skills to use, the brand guide to work from, and what fell short.
+With `RAMBLE_COACH=1`, Ramble fills that gap without touching your words:
+
+```text
+Make them better
+
+Suggestions Ramble added (I did not say these, and my words above come first; skip anything that doesn't fit):
+- Use if it fits: the `social-media-content` skill, the `ui-ux-pro-max` skill.
+- Reference: `docs/brand-guide.md`.
+- Ask me first: What specifically fell short in these posts or graphics?
+- Before redoing the work, say specifically what falls short of a professional LinkedIn standard, both in the copy and in the graphics.
+```
+
+Your words are the same cleanup as always, and the suggestions are a separate call, labelled as added, that you can read and delete before sending.
+It can only name skills, tools and files it found on your Mac, because code checks every name.
+It only runs where an agent will read it, so Slack and email never get it, and specific requests usually get nothing.
+It also sends the names and short descriptions of your skills and tools to the model; it never reads MCP server settings.
+The details and test results are in [docs/coach-mode.md](docs/coach-mode.md).
+
 ## Cost and speed
 
 On my MacBook Air, whisper's `small.en` model transcribes a typical sentence in 1 to 2 seconds after the first run of the day.
-The cleanup call through Claude Code carries about 8,300 tokens of fixed overhead, and the glossary and a full conversation context add a few thousand more; on Haiku that comes to about $0.002 a dictation in plan usage.
+The cleanup call through Claude Code carries about 2,400 tokens, and the glossary and a full conversation context add a few thousand more; on Haiku that comes to under $0.001 a dictation in plan usage.
+Coach mode adds one more call of about the same size, in parallel.
 
 ## Test bench
 
@@ -169,10 +200,12 @@ The cleanup call through Claude Code carries about 8,300 tokens of fixed overhea
 ~/.ramble/lab.py compare transcript.txt --ref "what you actually said"
 ~/.ramble/lab.py audio ~/.ramble/recordings/last.wav
 ~/.ramble/lab.py last
+~/.ramble/lab.py coach --runs 3
 ```
 
 `compare` runs a transcript through the live cleanup (twice, because the model is not deterministic), the structured instructions, no glossary, no context, and the local filler strip, with a word error rate against `--ref`.
 `audio` also transcribes with and without the name hint.
+`coach` runs the real model over the cases in `evals/coach.json` and says which suggestions broke the rules.
 `last` and `check` have Sonnet compare a transcript with its rewrite using `prompts/meaning.md` and list anything added, dropped or changed, rated major or minor.
 Rewrites with the same words as the transcript pass without a model call.
 
@@ -188,12 +221,16 @@ flowchart LR
     X --> C
     C --> L["claude -p --model haiku<br/>(or the API)"]
     L --> P["clipboard + Command+V"]
+    W -. "RAMBLE_COACH=1" .-> K["coach.py<br/>your skills and tools"]
+    X -.-> K
+    K -. "labelled suggestions" .-> P
 ```
 
 - `dictate.sh` is the whole pipeline (`toggle`, `start`, `stop`, `status`, `raw`); a lock makes a press during transcription answer "busy" instead of starting over.
 - `recorder/mic-record.swift` records the default input to a 16 kHz mono WAV through AVAudioRecorder; ffmpeg is the fallback.
 - `cleanup.py` builds the system prompt from `prompts/cleanup.md` and the glossary, and races hedged attempts so one stalled call does not hold up the paste.
-- `state/` holds the last raw transcript, the last cleanup and the last context sent; `recordings/last.wav` is the last recording; `dictate.log` is the log.
+- `coach.py` runs beside the cleanup when coach mode is on, and only ever adds a labelled block below the text.
+- `state/` holds the last raw transcript, the last cleanup, the last suggestions and the last context sent; `recordings/last.wav` is the last recording; `dictate.log` is the log.
 
 ## Develop
 
@@ -201,7 +238,7 @@ flowchart LR
 python3 -m unittest discover -s tests -t .
 ```
 
-The tests run `dictate.sh`, `cleanup.py`, `context.py`, `lab.py` and `install.sh` against stand-ins in `tests/bin` (a fake `claude` that prints stream-json, a fake `whisper-cli`, a fake recorder and a `pbcopy` that writes to a file), so they need no microphone, no model and no Claude account, and never touch your clipboard.
+The tests run `dictate.sh`, `cleanup.py`, `context.py`, `coach.py`, `lab.py` and `install.sh` against stand-ins in `tests/bin` (a fake `claude` that prints stream-json, a fake `whisper-cli`, a fake recorder and a `pbcopy` that writes to a file), so they need no microphone, no model and no Claude account, and never touch your clipboard.
 Known pitfalls are in [docs/gotchas.md](docs/gotchas.md).
 
 ## Uninstall

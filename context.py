@@ -37,6 +37,8 @@ NOISE = re.compile(r"^\s*<(system-reminder|command-|local-command|bash-|task-not
 
 
 def front_app():
+    if os.environ.get("RAMBLE_FRONT_APP"):  # tests, and anything else that knows better
+        return os.environ["RAMBLE_FRONT_APP"]
     asn = subprocess.run(["lsappinfo", "front"], capture_output=True, text=True, timeout=2).stdout.strip()
     out = subprocess.run(["lsappinfo", "info", "-only", "bundleid", asn], capture_output=True, text=True, timeout=2).stdout
     found = re.search(r'"?(?:CFBundleIdentifier|bundleID)"?\s*=\s*"([^"]+)"', out)
@@ -87,15 +89,40 @@ def session_messages(path):
     return bool(interactive), messages
 
 
-def from_terminal(now=None):
+def newest_session(now=None):
+    """(path, messages) of the newest interactive session written recently, or (None, [])."""
     now = time.time() if now is None else now
     files = sorted((p for p in PROJECTS.glob("*/*.jsonl") if now - p.stat().st_mtime < FRESH_SECONDS),
                    key=lambda p: p.stat().st_mtime, reverse=True)
     for path in files[:6]:
         interactive, messages = session_messages(path)
         if interactive and messages:
-            return "Claude Code session", messages
-    return "", []
+            return path, messages
+    return None, []
+
+
+def from_terminal(now=None):
+    path, messages = newest_session(now)
+    return ("Claude Code session", messages) if path else ("", [])
+
+
+def newest_session_cwd(now=None):
+    """The folder that session is running in (coach.py looks there for project skills and brand documents), or ""."""
+    path, _ = newest_session(now)
+    if not path:
+        return ""
+    size = path.stat().st_size
+    with path.open("rb") as handle:
+        handle.seek(max(0, size - TAIL_BYTES))
+        lines = handle.read().decode("utf-8", "replace").splitlines()
+    for line in reversed(lines):
+        try:
+            cwd = json.loads(line).get("cwd")
+        except (ValueError, AttributeError):
+            continue
+        if cwd:
+            return cwd
+    return ""
 
 
 def render(where, messages):

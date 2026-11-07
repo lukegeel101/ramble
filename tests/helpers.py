@@ -12,9 +12,10 @@ BIN = ROOT / "tests" / "bin"
 
 def make_install(dest: Path, glossary=True):
     """Copy the scripts into dest the way install.sh lays them out, with the fake recorder."""
-    for name in ("dictate.sh", "cleanup.py", "context.py", "lab.py"):
+    for name in ("dictate.sh", "cleanup.py", "context.py", "coach.py", "lab.py"):
         shutil.copy2(ROOT / name, dest / name)
     shutil.copytree(ROOT / "prompts", dest / "prompts")
+    shutil.copytree(ROOT / "evals", dest / "evals")
     (dest / "recorder").mkdir()
     shutil.copy2(ROOT / "tests" / "fake-mic-record", dest / "recorder" / "mic-record")
     if glossary:
@@ -40,6 +41,8 @@ class InstallCase(unittest.TestCase):
             "RAMBLE_API_KEY_FILE": str(self.tmp / "no-such-key"),
             "RAMBLE_PYTHON": sys.executable,
             "RAMBLE_CONTEXT": "0",
+            "RAMBLE_CLAUDE_HOME": str(self.tmp / "no-claude-home"),
+            "RAMBLE_CLAUDE_JSON": str(self.tmp / "no-claude.json"),
             "RAMBLE_CLAUDE_PROJECTS": str(self.tmp / "no-projects"),
             "FAKE_CLAUDE_LOG": str(self.tmp / "claude-calls.jsonl"),
             "FAKE_WHISPER_LOG": str(self.tmp / "whisper-args.txt"),

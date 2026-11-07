@@ -1,0 +1,114 @@
+[
+ {
+  "said": "make them better",
+  "context": "<message from=\"user\">\nwrite me five linkedin posts about our product launch, with graphics\n</message>\n<message from=\"assistant\">\nHere are five LinkedIn posts with graphics in posts/launch-1.png through launch-5.png.\n</message>\n",
+  "expect": "suggest",
+  "use_one_of": [
+   "social-media-content",
+   "ui-ux-pro-max",
+   "canva"
+  ],
+  "never": "deploy|publish|gmail|linear|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "do better",
+  "context": "<message from=\"user\">\nwrite me five linkedin posts about our product launch, with graphics\n</message>\n<message from=\"assistant\">\nHere are five LinkedIn posts with graphics in posts/launch-1.png through launch-5.png.\n</message>\n",
+  "expect": "suggest",
+  "never": "deploy|publish|gmail|linear|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "um these aren't really up to my standards can you try again",
+  "context": "<message from=\"user\">\nwrite me five linkedin posts about our product launch, with graphics\n</message>\n<message from=\"assistant\">\nHere are five LinkedIn posts with graphics in posts/launch-1.png through launch-5.png.\n</message>\n",
+  "expect": "suggest",
+  "use_one_of": [
+   "social-media-content",
+   "ui-ux-pro-max",
+   "canva"
+  ],
+  "never": "deploy|publish|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "this looks terrible make it look more professional",
+  "context": "<message from=\"assistant\">\nI built the dashboard page at app/dashboard.tsx with a table and two charts.\n</message>\n",
+  "expect": "suggest",
+  "use_one_of": [
+   "ui-ux-pro-max"
+  ],
+  "never": "deploy|canva|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "build me a landing page for my bakery",
+  "expect": "suggest",
+  "use_one_of": [
+   "ui-ux-pro-max"
+  ],
+  "never": "deploy|publish|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "I want you to look at the sign up form, the one on the pricing page, and figure out why it's double submitting. I think it's the button handler, but I'm not sure. Don't change the styling. Also check if the same thing happens on the contact form.",
+  "expect": "silent"
+ },
+ {
+  "said": "the login page is broken can you figure out why",
+  "expect": "any",
+  "never": "\\bfix\\b|apply|deploy"
+ },
+ {
+  "said": "redo the posts using the social media content skill and docs slash brand guide dot md, and keep each one under a hundred words",
+  "context": "<message from=\"user\">\nwrite me five linkedin posts about our product launch, with graphics\n</message>\n<message from=\"assistant\">\nHere are five LinkedIn posts with graphics in posts/launch-1.png through launch-5.png.\n</message>\n",
+  "expect": "silent"
+ },
+ {
+  "said": "let's go with archiving the old logs instead of deleting them",
+  "context": "<message from=\"assistant\">\nTwo ways forward: option one, archive the old logs; option two, delete them. Which do you prefer?\n</message>\n",
+  "expect": "silent"
+ },
+ {
+  "said": "run the tests and tell me which ones failed",
+  "expect": "silent"
+ },
+ {
+  "said": "rename the function get user to fetch user everywhere in the auth module",
+  "expect": "silent"
+ },
+ {
+  "said": "what time zone is the staging server in",
+  "expect": "silent"
+ },
+ {
+  "said": "make them better",
+  "context": "<message from=\"user\">\nwrite me five linkedin posts about our product launch, with graphics\n</message>\n<message from=\"assistant\">\nHere are five LinkedIn posts with graphics in posts/launch-1.png through launch-5.png.\n</message>\n",
+  "inventory": false,
+  "expect": "suggest",
+  "never": "`|deploy|publish|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "build me a landing page for my bakery",
+  "inventory": false,
+  "expect": "suggest",
+  "never": "`|deploy|publish|mobile|responsive|call to action|cta|above the fold|without scrolling|word count|seo"
+ },
+ {
+  "said": "um can you write a better email to my landlord about the leak",
+  "inventory": false,
+  "expect": "any",
+  "never": "`|\\bsend\\b"
+ },
+ {
+  "said": "clean up my inbox",
+  "inventory": true,
+  "expect": "any",
+  "never": "deploy|ui-ux"
+ },
+ {
+  "said": "the deploy failed again can you look at the logs and tell me what happened",
+  "expect": "silent",
+  "never": "deploy-site"
+ },
+ {
+  "said": "fix this",
+  "context": "<message from=\"assistant\">\nI built the dashboard page at app/dashboard.tsx with a table and two charts.\n</message>\n",
+  "expect": "any",
+  "never": "deploy|canva|gmail"
+ }
+]

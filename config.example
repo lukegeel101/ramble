@@ -22,6 +22,19 @@
 # Dictations shorter than this many words only get the local filler strip.
 # RAMBLE_CLEANUP_MIN_WORDS=6
 
+# Coach: 1 adds labelled suggestions below your words when you are vague with an agent (the skills you have that
+# fit, what to ask you, what good looks like). Your words stay as cleaned up. A second model call; see the README.
+# RAMBLE_COACH=0
+# RAMBLE_COACH_MODEL=haiku
+# Paste without suggestions if the coach has not answered after this many seconds.
+# RAMBLE_COACH_SECONDS=20
+# Dictations shorter than this many words get no suggestions.
+# RAMBLE_COACH_MIN_WORDS=2
+# Apps that always count as an agent, by bundle ID, comma separated (a terminal only counts with a live Claude Code session).
+# RAMBLE_COACH_APPS="com.example.AgentApp"
+# More folders of skills to choose from, colon separated, each with */SKILL.md inside.
+# RAMBLE_SKILL_DIRS="$HOME/.agents/skills"
+
 # Direct Anthropic API instead of claude -p: put the key on one line in this file (chmod 600).
 # RAMBLE_API_KEY_FILE="$HOME/.config/ramble/anthropic-api-key"
 # RAMBLE_API_MODEL=claude-haiku-4-5

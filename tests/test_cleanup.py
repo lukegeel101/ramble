@@ -87,6 +87,17 @@ class Cli(InstallCase):
         self.assertIn("--no-session-persistence", args)
         self.assertIn("\n<glossary>\n", args[args.index("--system-prompt") + 1])
 
+    def test_run_starts_claude_where_no_instruction_file_is_found(self):
+        # claude reads AGENTS.md and CLAUDE.md from its folder and every parent, so ~/.ramble would pick up ~/AGENTS.md.
+        log = self.tmp / "cwd.txt"
+        self.assertEqual(self.cli("run", stdin="please check the build", FAKE_CLAUDE_CWD_LOG=str(log)).returncode, 0)
+        cwd = Path(log.read_text().strip()).resolve()
+        self.assertFalse(cwd.is_relative_to(Path.home().resolve()), cwd)
+        self.assertNotEqual(cwd, self.home.resolve())
+        for folder in (cwd, *cwd.parents):
+            for name in ("AGENTS.md", "CLAUDE.md"):
+                self.assertFalse((folder / name).exists(), folder / name)
+
     def test_run_fails_when_every_attempt_fails(self):
         p = self.cli("run", stdin="please check the build", FAKE_CLAUDE_MODE="fail")
         self.assertEqual(p.returncode, 1)

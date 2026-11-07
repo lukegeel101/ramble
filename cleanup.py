@@ -11,7 +11,8 @@ The model's instructions are prompts/cleanup.md (or RAMBLE_PROMPT) followed by g
 Backends, in order:
   - The Anthropic API directly, when the key file exists (RAMBLE_API_KEY_FILE, default
     ~/.config/ramble/anthropic-api-key, one line). About 1 s, billed to that key. Without the file it is never used.
-  - Claude Code: `claude -p` with no tools, hooks, MCP servers or saved session, the instructions as its system prompt.
+  - Claude Code: `claude -p` with no tools, hooks, MCP servers or saved session, the instructions as its system prompt,
+    from an empty folder so that no instruction file of yours goes along.
 An attempt that has not answered within RAMBLE_CLEANUP_HEDGE seconds gets a second, parallel attempt (and a third
 after the same wait again); the first answer wins and the rest are killed. The whole call gives up after
 RAMBLE_CLEANUP_SECONDS so the caller can copy the raw transcript.
@@ -24,6 +25,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -100,6 +102,15 @@ def claude_cmd():
             "--output-format", "stream-json", "--verbose"]
 
 
+def neutral_dir():
+    """An empty folder outside your home for `claude` to run in. It looks for instruction files in the folder it starts
+    in and every parent, whatever --setting-sources says, so running under ~/ would send a ~/AGENTS.md or ~/CLAUDE.md
+    along with every dictation (see docs/gotchas.md)."""
+    path = Path(tempfile.gettempdir()) / "ramble-empty"
+    path.mkdir(exist_ok=True)
+    return path
+
+
 def child_env():
     """`claude` refuses to start inside another Claude Code session, which matters when this runs from one."""
     return {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")}
@@ -136,7 +147,7 @@ class Attempt:
 
 
 def spawn_claude():
-    return subprocess.Popen(claude_cmd(), cwd=HERE, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    return subprocess.Popen(claude_cmd(), cwd=neutral_dir(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, text=True, start_new_session=True, env=child_env())
 
 
