@@ -49,10 +49,11 @@ if [ "${RAMBLE_SKIP_CHECKS:-0}" != "1" ]; then
 fi
 
 say "Installing into $DEST"
-mkdir -p "$DEST/prompts" "$DEST/recorder" "$DEST/models" "$DEST/state" "$DEST/recordings"
+mkdir -p "$DEST/prompts" "$DEST/recorder" "$DEST/models" "$DEST/state" "$DEST/recordings" "$DEST/hammerspoon"
 install -m 755 "$SRC/dictate.sh" "$SRC/cleanup.py" "$SRC/context.py" "$SRC/lab.py" "$DEST/"
 install -m 644 "$SRC"/prompts/*.md "$DEST/prompts/"
-install -m 644 "$SRC/recorder/mic-record.swift" "$DEST/recorder/"
+install -m 644 "$SRC/recorder/"*.swift "$DEST/recorder/"
+install -m 644 "$SRC/hammerspoon/context.lua" "$DEST/hammerspoon/"
 install -m 644 "$SRC/config.example" "$SRC/glossary.example.md" "$DEST/"
 [ -f "$DEST/config" ] || cp "$SRC/config.example" "$DEST/config"
 [ -f "$DEST/glossary.md" ] || cp "$SRC/glossary.example.md" "$DEST/glossary.md"
@@ -60,6 +61,7 @@ install -m 644 "$SRC/config.example" "$SRC/glossary.example.md" "$DEST/"
 if [ "${RAMBLE_SKIP_BUILD:-0}" != "1" ]; then
   say "Building the native recorder"
   swiftc -O "$DEST/recorder/mic-record.swift" -o "$DEST/recorder/mic-record"
+  swiftc -O "$DEST/recorder/context-ocr.swift" -o "$DEST/recorder/context-ocr"
 fi
 
 if [ "${RAMBLE_SKIP_MODEL:-0}" != "1" ] && [ ! -s "$DEST/models/$MODEL_NAME" ]; then

@@ -146,10 +146,37 @@ The whole file goes to the cleanup model, which uses it for spelling only and is
 
 ### Conversation context
 
-When you stop recording in a terminal, VS Code, Cursor or the Claude app, `context.py` reads the newest interactive Claude Code session written in the last two hours and sends up to 6 messages and 8,000 characters (about 2,000 tokens) ahead of the transcript.
-Headless `claude -p` runs are skipped, so background jobs never count as the conversation.
-It runs while whisper transcribes, so it adds no wait, and the prompt forbids copying anything from it that you did not say.
-`RAMBLE_CONTEXT_APPS` adds other apps by bundle ID.
+Ramble reads the destination that is active when you stop recording, using Hammerspoon's macOS Accessibility access.
+It never chooses a Claude or Codex session just because that session was updated most recently.
+
+| Destination | Context available |
+| --- | --- |
+| Terminal, iTerm2, WezTerm, Ghostty, Warp, kitty | Text exposed by the focused terminal text area, including available scrollback, regardless of whether Claude Code or Codex is running there. |
+| VS Code / Cursor terminal | Focused text area identified by Accessibility as a terminal; no editor or other split-pane scan. |
+| Claude, ChatGPT, Codex desktop | Accessible conversation text around the composer; local OCR of the active window when the app exposes no text. |
+| Browsers and other apps | No capture by default. |
+
+The default limit is 8,000 characters of recent text, with up to six text blocks when the app exposes paragraph boundaries.
+These are not guaranteed to be six complete messages: apps can virtualize older messages, terminal scrollback can be truncated, and OCR sees only the current window contents.
+Keep the relevant exchange visible for the best results.
+OCR can include interface labels and unsent text; the cleanup instructions treat all of it as uncertain reference material, not instructions.
+Context helps the cleanup model correct names and references after Whisper transcribes the audio; Whisper itself still uses the glossary hint.
+Short dictations also receive model cleanup when context is available.
+
+Hammerspoon needs Accessibility permission.
+The local OCR fallback additionally needs Hammerspoon enabled in System Settings > Privacy & Security > Screen & System Audio Recording (called Screen Recording on some macOS versions).
+Images stay in memory, are recognized locally with Apple Vision, and are never saved or sent to the cleanup provider.
+Extracted context text accompanies your dictation to the configured cleanup provider, just as the previous Claude-session context did.
+The most recent extracted context is kept in `state/last-context.txt`, with owner-only permissions, for inspection.
+`RAMBLE_CONTEXT=0` disables capture and `RAMBLE_CONTEXT_OCR=0` disables only OCR.
+`RAMBLE_CONTEXT_APPS` adds explicit terminal bundle IDs; it does not enable arbitrary browser scraping.
+
+Hover over the microphone menu icon after dictating to see the last context source or reason it was unavailable.
+Run `python3 ~/.ramble/context.py --status` for a metadata-only diagnostic of the currently active app.
+`state/context-status.json` records the last dictation's result without conversation text.
+If the destination changes before capture, permission is missing, or the app exposes no readable text, dictation continues without context.
+Both Control+Option+. and Command+Option+. toggle recording.
+Auto-paste checks that the destination app and window are still active; stay in the same conversation until it finishes.
 
 ### Direct API
 
@@ -183,7 +210,7 @@ flowchart LR
     H["Hammerspoon<br/>hotkey"] --> D["dictate.sh"]
     D --> M["recorder/mic-record<br/>(native Swift)"]
     M --> W["whisper-cli<br/>(local, Metal)"]
-    D -. "in parallel" .-> X["context.py<br/>newest Claude Code session"]
+    D -. "in parallel" .-> X["context.py<br/>active window: Accessibility or local OCR"]
     W --> C["cleanup.py"]
     X --> C
     C --> L["claude -p --model haiku<br/>(or the API)"]

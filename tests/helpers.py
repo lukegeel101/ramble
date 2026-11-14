@@ -15,6 +15,7 @@ def make_install(dest: Path, glossary=True):
     for name in ("dictate.sh", "cleanup.py", "context.py", "lab.py"):
         shutil.copy2(ROOT / name, dest / name)
     shutil.copytree(ROOT / "prompts", dest / "prompts")
+    shutil.copytree(ROOT / "hammerspoon", dest / "hammerspoon")
     (dest / "recorder").mkdir()
     shutil.copy2(ROOT / "tests" / "fake-mic-record", dest / "recorder" / "mic-record")
     if glossary:

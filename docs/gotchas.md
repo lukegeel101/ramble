@@ -2,6 +2,67 @@
 
 Problems hit while building Ramble, and their verified fixes.
 
+## Context can come from a different Claude conversation
+
+- **Symptom:** Dictating into one terminal or the GPT desktop app could use another Claude session, or no context at all.
+- **Root cause:** The old reader selected the most recently modified interactive Claude transcript rather than matching the destination.
+- **Fix:** Capture the active app/window, read only its focused terminal pane or conversation Accessibility subtree, and use on-device window OCR for supported desktop apps without exposed text.
+  Remove the session-recency fallback entirely and report capture status without logging message text.
+- **Verified:** 2026-11-14: AX tree fixtures cover destination changes, sidebar exclusion, secure fields, unsupported apps, and missing permissions; Python regressions prove a newer unrelated Claude transcript is never selected.
+  A synthetic spoken recording passed through real Whisper and signed-in Claude cleanup, correcting "marzipan queue" to "MarzipanQueue" from supplied context.
+
+## Short dictations bypassed contextual correction
+
+- **Symptom:** A short request with a context-specific term only received local filler removal.
+- **Root cause:** The word-count threshold bypassed the cleanup model even when conversation context existed.
+- **Fix:** Use model cleanup for short dictations when context is available, retaining the local path when it is absent.
+- **Verified:** 2026-11-14: the full shell pipeline test confirms a three-word dictation reaches cleanup with the captured context and is copied to the safe test clipboard.
+
+## The installed dictation tool can predate the Ramble install folder
+
+- **Symptom:** `~/.ramble` was absent although the menu button and dictation shortcut worked.
+- **Root cause:** Hammerspoon's inline module still invoked `~/Claude/Dictation/dictate.sh`, which has separate scripts and older context behavior.
+- **Fix:** Inspect the actual Hammerspoon entry point before diagnosing a missing installation.
+  For the verified mac16 migration, back up the legacy-only `init.lua`, install Ramble, preserve the personal glossary and existing Whisper model, and replace the old inline bindings with one `require("ramble")`.
+  Do not append a second dictation module alongside the legacy bindings.
+- **Verified:** 2026-11-14: the new `~/.ramble` reports IDLE; Hammerspoon reports exactly the Control+Option+., Command+Option+., and raw-recovery bindings.
+  The original installation and `init.lua.before-ramble-context-20261114` remain available for rollback.
+
+## Native desktop messages can be absent from Accessibility
+
+- **Symptom:** The GPT desktop app exposed only empty nested groups, with no focused message element.
+- **Root cause:** The installed `com.openai.codex` app did not expose its conversation text through the tested Accessibility attributes, even after requesting manual Accessibility exposure.
+- **Fix:** Use local Apple Vision OCR of that active desktop window when text is unavailable.
+  Screen Recording permission for Hammerspoon is required in addition to Accessibility.
+  Report `screen-recording-denied` instead of substituting a different conversation.
+- **Verified:** 2026-11-14: a native rendered-image fixture recovered `MarzipanQueue` and `retryBudget` exactly; after Luke enabled permission, Hammerspoon reported both permission checks true.
+  Computer Use denied direct Terminal and GPT desktop control, so no successful automated desktop conversation test is claimed.
+
+## Local verification has machine-specific constraints
+
+- **Symptom:** Swift's first build could not write its module cache, ShellCheck was missing, and the other machine's coordination mailbox was unreachable.
+- **Root cause:** The execution sandbox excluded the default Swift cache; the lint tool was not installed; the air8 SSH connection timed out even after an approved retry.
+- **Fix:** Compile with approved cache access and install ShellCheck through Homebrew.
+  Continue repository coordination through the verified GitHub branch claim without treating the unreachable mailbox as evidence that the other machine is idle.
+- **Verified:** 2026-11-14: both native helpers compiled, ShellCheck passed, and `agent-branch` created an isolated mac16 claim.
+  The mailbox remained unreachable; no cross-machine state was modified.
+
+## A native UI test can outlive its command timeout
+
+- **Symptom:** A Hammerspoon AppleScript fixture timed out at the IPC client while the underlying request was still completing.
+- **Root cause:** A synchronous automation request blocked Hammerspoon; the later capture could observe a changed front window.
+- **Fix:** Do not count that fixture as a controlled end-to-end success or retry it through another UI interface after a safety denial.
+  Production capture receives the stop-press app/window identity and fails closed on a mismatch.
+- **Verified:** 2026-11-14: destination mismatch regressions pass; the test console was closed and Hammerspoon was reloaded for the installed build.
+  The successful audio-to-cleanup smoke test used only synthetic input and a file clipboard.
+
+## A shell fixture embedded in Python can break test discovery
+
+- **Symptom:** The first new pipeline regression failed to import because of nested quote escaping in its fake Hammerspoon script.
+- **Root cause:** Shell quote syntax was embedded incorrectly inside a Python string.
+- **Fix:** Use a small Python stand-in that emits JSON instead of nested shell quoting.
+- **Verified:** 2026-11-14: all 53 unit and pipeline regression tests pass after the fixture correction.
+
 ## ffmpeg's avfoundation input drops audio buffers
 
 Recording with `ffmpeg -f avfoundation` dropped about one 11 ms audio buffer in seven on a MacBook Air: 122 holes, 1.3 s of a 9.55 s recording, closed up in the file rather than left as silence, and worse under load.

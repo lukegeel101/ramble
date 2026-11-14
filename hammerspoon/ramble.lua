@@ -15,19 +15,34 @@ local working = nil  -- the "Transcribing" alert, shown until the stop finishes
 -- Auto-paste: when the text is ready, press Command+V for you, but only if the app that was in front when you
 -- stopped recording is still in front. Needs Accessibility permission for Hammerspoon.
 -- Turn it off by creating the file no-autopaste in the install folder.
+local stopWindow = nil
 local stopApp = nil  -- bundle ID of the app in front at the stop press
 local function autopaste()
   if hs.fs.attributes(home .. "/no-autopaste") then return false end
   if not hs.accessibilityState(true) then return false end
   local front = hs.application.frontmostApplication()
-  if not (front and stopApp and front:bundleID() == stopApp) then return false end
-  hs.timer.doAfter(0.05, function() hs.eventtap.keyStroke({"cmd"}, "v", 0) end)
+  local function sameDestination()
+    local win = hs.window.focusedWindow()
+    local app = hs.application.frontmostApplication()
+    return app and app:bundleID() == stopApp and win and win:id() == stopWindow
+  end
+  if not (front and stopApp and sameDestination()) then return false end
+  hs.timer.doAfter(0.05, function() if sameDestination() then hs.eventtap.keyStroke({"cmd"}, "v", 0) end end)
   return true
 end
 
+local function contextStatus()
+  local f = io.open(home .. "/state/context-status.json", "r")
+  if not f then return "Context: no dictation yet" end
+  local raw = f:read("*a"); f:close()
+  local ok, value = pcall(hs.json.decode, raw)
+  if not ok or type(value) ~= "table" then return "Context: unavailable" end
+  if value.status == "ok" then return "Context: " .. (value.source or "active window") .. " (" .. tostring(value.characters) .. " characters)" end
+  return "Context: " .. (value.status or "unavailable")
+end
 local function setIdle()
   if working then hs.alert.closeSpecific(working); working = nil end
-  if menu then menu:setTitle("🎙"); menu:setTooltip("Dictation idle (Control+Option+.)") end
+  if menu then menu:setTitle("🎙"); menu:setTooltip("Dictation idle (Control+Option+. or Command+Option+.)\n" .. contextStatus()) end
 end
 local function setRecording()
   if menu then menu:setTitle("🔴 REC"); menu:setTooltip("Recording: Control+Option+. to stop") end
@@ -54,9 +69,13 @@ local function toggle()
     hs.alert.show("Still transcribing the last one. Wait for \"Copied\".", 2)
     return
   end
+  local args = {"toggle"}
   if now == "RECORDING" then
     local front = hs.application.frontmostApplication()
     stopApp = front and front:bundleID() or nil
+    local win = hs.window.focusedWindow()
+    stopWindow = win and win:id() or nil
+    args = {"toggle", stopApp or "", stopWindow and tostring(stopWindow) or ""}
     setWorking()
   end
   hs.task.new(script, function(_, out, err)
@@ -80,10 +99,12 @@ local function toggle()
     else
       setIdle(); hs.alert.show("Dictation error: " .. (out ~= "" and out or (err or "unknown")), 4)
     end
-  end, {"toggle"}):start()
+  end, args):start()
 end
 
 hs.hotkey.bind(hotkey.mods, hotkey.key, toggle)
+-- Also support the Command+Option+. shortcut used by existing installations.
+hs.hotkey.bind({"cmd", "alt"}, ".", toggle)
 
 hs.hotkey.bind(rawHotkey.mods, rawHotkey.key, function()
   hs.task.new(script, function(_, out, err)

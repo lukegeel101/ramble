@@ -30,9 +30,11 @@
 # RAMBLE_GLOSSARY=1
 # RAMBLE_HINT=1
 
-# Conversation context from your newest interactive Claude Code session.
+# Context from the active terminal pane or desktop conversation, never another session.
 # RAMBLE_CONTEXT=1
-# RAMBLE_CONTEXT_MESSAGES=6
+# RAMBLE_CONTEXT_MESSAGES=6  # recent text blocks; AX/OCR may not expose message boundaries
 # RAMBLE_CONTEXT_CHARS=8000
-# Extra app bundle IDs that count as a terminal, comma separated.
+# Local OCR fallback for desktop apps without accessible text; needs Screen Recording.
+# RAMBLE_CONTEXT_OCR=1
+# Extra terminal app bundle IDs, comma separated (read only their focused AXTextArea).
 # RAMBLE_CONTEXT_APPS="com.example.MyTerminal"

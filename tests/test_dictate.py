@@ -42,6 +42,19 @@ class Dictate(InstallCase):
         log = (self.home / "dictate.log").read_text()
         self.assertIn("recording started (native)", log)
 
+    def test_context_reaches_cleanup_even_for_short_dictation(self):
+        hs = self.tmp / "hs"
+        hs.write_text("#!/usr/bin/env python3\nprint('{\"status\":\"ok\",\"source\":\"terminal-accessibility\",\"text\":\"Assistant: rename MarzipanQueue\"}')\n")
+        hs.chmod(0o755)
+        body = self.tmp / "body.txt"
+        p = self.dictate(RAMBLE_CONTEXT="1", RAMBLE_HS=str(hs), FAKE_WHISPER_TEXT="fix marzipan queue",
+                         FAKE_CLAUDE_BODY=str(body))
+        self.assertIn("COPIED: CLEANED:", p.stdout)
+        self.assertIn("MarzipanQueue", body.read_text())
+        self.assertIn("<context>", body.read_text())
+        self.assertEqual(self.sh("status").stdout.strip(), "IDLE")
+        self.assertEqual((self.home / "state/last-context.txt").stat().st_mode & 0o777, 0o600)
+
     def test_whisper_gets_the_glossary_hint(self):
         self.dictate()
         args = Path(self.env["FAKE_WHISPER_LOG"]).read_text().splitlines()
