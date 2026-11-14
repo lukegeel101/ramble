@@ -2,6 +2,31 @@
 
 Problems hit while building Ramble, and their verified fixes.
 
+## Captured identifier spellings are ignored or acquire a duplicated suffix
+
+- **Symptom:** A user-initiated desktop OCR test captured `SilverOtterCache` correctly, but cleanup returned "Silver Otter cache".
+  Another test produced "CopperFinchQueue queue" even though queue was spoken once.
+- **Root cause:** Context capture succeeded, but the cleanup model applied the short-transcript and valid-name preservation rules inconsistently to compound identifiers.
+  Synthetic replay reproduced the duplicated suffix and exposed unsupported replacement of a different name with the contextual name.
+  Prompt-only revisions still sometimes added a category such as service or completed an ordinary description into an identifier.
+- **Fix:** Both cleanup prompts explicitly consume the complete spoken identifier once, preserve its exact contextual spelling, and prohibit importing category labels or substituting different constituent words.
+  A local output check independently rejects emitted contextual compound names without a complete matching word sequence in the original, ambiguous spellings, excess name occurrences, and inserted words beside a corrected name.
+  A rejected rewrite falls back to local cleanup of the original while retaining only fully supported identifier spellings.
+  This check is conservative and does not guess phonetic matches for compound names.
+- **Verified:** 2026-11-14: 66 offline tests passed, including source-preservation regressions, and synthetic speech passed through real Whisper, cleanup, the local check, and a file clipboard as "Please restart the SilverOtterCache."
+  The default prompt passed all 12 repeated live synthetic cases.
+  Structured mode passed all five contextual cases; its no-context control intentionally shortened "Please restart" to "Restart", so the evaluator accepts that documented direct style only in structured mode.
+  The opt-in `tests/eval_context_spelling.py` suite tests the real cleanup pipeline with fictional examples without reading saved dictations.
+  The user-initiated native test also confirmed `window-ocr` capture; capture success alone was insufficient evidence of correct cleanup.
+
+## Debug replay can retransmit private captured context
+
+- **Symptom:** Automatic approval review rejected a proposed replay of the saved dictation and captured conversation to the cleanup provider.
+- **Root cause:** Debugging retransmission of that private payload was not specifically authorized by the original feature request.
+- **Fix:** Inspect the relevant saved evidence locally, then reproduce with newly constructed fictional context and test sentences.
+  The live regression runner disables the personal glossary, uses no saved dictation state, and requires `--live` to send its synthetic cases.
+- **Verified:** 2026-11-14: the rejected replay was not executed; the synthetic baseline reproduced the duplication and wrong-name errors, and the audio smoke test used synthetic speech and a file clipboard.
+
 ## Context can come from a different Claude conversation
 
 - **Symptom:** Dictating into one terminal or the GPT desktop app could use another Claude session, or no context at all.

@@ -162,6 +162,11 @@ Keep the relevant exchange visible for the best results.
 OCR can include interface labels and unsent text; the cleanup instructions treat all of it as uncertain reference material, not instructions.
 Context helps the cleanup model correct names and references after Whisper transcribes the audio; Whisper itself still uses the glossary hint.
 Short dictations also receive model cleanup when context is available.
+The cleanup instructions treat the complete spoken name as one identifier, preserving its contextual spelling without repeating a final word such as queue or cache.
+A local guard checks compound identifiers emitted by the model against the complete word sequence in the original dictation.
+If a name was substituted without that match, or cleanup added words beside it, Ramble falls back to local cleanup of the original and retains only fully supported identifier spellings.
+This check is deliberately conservative rather than phonetic: uncertain compound names can remain uncorrected.
+Other corrections remain model-based; a successful context capture does not by itself prove the rewrite is correct.
 
 Hammerspoon needs Accessibility permission.
 The local OCR fallback additionally needs Hammerspoon enabled in System Settings > Privacy & Security > Screen & System Audio Recording (called Screen Recording on some macOS versions).
@@ -230,6 +235,14 @@ python3 -m unittest discover -s tests -t .
 
 The tests run `dictate.sh`, `cleanup.py`, `context.py`, `lab.py` and `install.sh` against stand-ins in `tests/bin` (a fake `claude` that prints stream-json, a fake `whisper-cli`, a fake recorder and a `pbcopy` that writes to a file), so they need no microphone, no model and no Claude account, and never touch your clipboard.
 Known pitfalls are in [docs/gotchas.md](docs/gotchas.md).
+
+### Live identifier regression check
+
+`python3 tests/eval_context_spelling.py --live --repeats 3` runs synthetic identifier cases through the existing Claude CLI login.
+Use `--prompt structured` to check the optional structured cleanup prompt.
+The cases cover exact contextual spelling, duplicated suffixes, ordinary descriptions, different names, separately spoken nouns, and absent context.
+This opt-in check sends only the synthetic test sentences and context, disables the personal glossary, never reads saved dictations, and never touches the clipboard.
+It is separate from the offline CI suite and returns failure when an output differs from its expected wording.
 
 ## Uninstall
 

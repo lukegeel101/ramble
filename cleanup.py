@@ -19,6 +19,7 @@ RAMBLE_CLEANUP_SECONDS so the caller can copy the raw transcript.
 from __future__ import annotations
 
 import json
+import difflib
 import os
 import re
 import signal
@@ -87,11 +88,78 @@ def hint():
     return " ".join(section.group(1).split())[:HINT_CHARS]
 
 
-def message(text, context_file):
-    ctx = ""
-    if context_file and os.path.isfile(context_file) and os.path.getsize(context_file):
-        ctx = "<context>\n" + Path(context_file).read_text(errors="replace") + "</context>\n\n"
+def read_context(context_file):
+    if context_file and os.path.isfile(context_file):
+        return Path(context_file).read_text(errors="replace")
+    return ""
+
+
+def message(text, context_file, context_text=None):
+    context_text = read_context(context_file) if context_text is None else context_text
+    ctx = "<context>\n" + context_text + "</context>\n\n" if context_text else ""
     return f"{ctx}<transcript>\n{text}\n</transcript>\n"
+
+
+IDENTIFIER = re.compile(r"(?<![\w-])[A-Za-z][A-Za-z0-9]*(?![\w-])")
+CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def name_parts(name):
+    return CAMEL_BOUNDARY.split(name)
+
+
+def lexical_words(text):
+    # CamelCase changes spelling, not the number of words the person spoke.
+    return [part.casefold() for word in re.findall(r"\w+", text) for part in name_parts(word)]
+
+
+def guard_context_names(raw, rewrite, context):
+    """Reject unsupported compound-name substitutions and words added next to them.
+
+    This is deliberately an exact-word check, not phonetic name guessing.
+    On rejection use local cleanup of the original, retaining only full-name spellings
+    the model chose AND whose complete word sequence is present in the original.
+    Ordinary single-word spelling corrections remain the model's responsibility.
+    """
+    names = {m.group() for m in IDENTIFIER.finditer(context) if len(name_parts(m.group())) > 1}
+    if not names:
+        return rewrite
+    canonical = {}
+    for name in names:
+        canonical.setdefault(tuple(p.casefold() for p in name_parts(name)), set()).add(name)
+    valid, spans = {}, []
+    unsupported = False
+    for name in sorted(names):
+        # Only guard names actually introduced in their contextual spelling.
+        emitted = list(re.finditer(r"(?<!\w)" + re.escape(name) + r"(?!\w)", rewrite))
+        if not emitted:
+            continue
+        parts = name_parts(name)
+        pattern = re.compile(r"(?<!\w)" + r"\s*".join(re.escape(p) for p in parts) + r"(?!\w)", re.I)
+        heard = list(pattern.finditer(raw))
+        ambiguous = len(canonical[tuple(p.casefold() for p in parts)]) > 1
+        if len(heard) < len(emitted) or (ambiguous and not all(m.group() == name for m in heard)):
+            unsupported = True
+            continue
+        valid[name] = pattern
+        for occurrence in emitted:
+            start = len(lexical_words(rewrite[:occurrence.start()]))
+            spans.append((start, start + len(parts)))
+    before, after = lexical_words(strip(raw)), lexical_words(rewrite)
+    # A new category label or duplicated suffix immediately before/after an identifier
+    # is not part of its spelling. Do not erase an independently spoken use elsewhere.
+    added_near_name = any(
+        tag in ("insert", "replace") and any(j1 <= end and j2 >= start for start, end in spans)
+        for tag, _, _, j1, j2 in difflib.SequenceMatcher(a=before, b=after, autojunk=False).get_opcodes()
+    )
+    if not unsupported and not added_near_name:
+        return rewrite
+    safe = strip(raw)
+    # Longest first avoids replacing a prefix of a longer compound name.
+    for name, pattern in sorted(valid.items(), key=lambda item: len(item[0]), reverse=True):
+        safe = pattern.sub(name, safe)
+    log("rejected unsupported contextual name or adjacent addition; used faithful local cleanup")
+    return safe
 
 
 def claude_cmd():
@@ -226,10 +294,11 @@ def run(context_file):
     text = sys.stdin.read().strip()
     if not text:
         return 1
-    result = race(message(text, context_file))
+    context = read_context(context_file)
+    result = race(message(text, context_file, context))
     if not result:
         return 1
-    sys.stdout.write(result)
+    sys.stdout.write(guard_context_names(text, result, context))
     return 0
 
 

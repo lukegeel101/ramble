@@ -44,4 +44,4 @@ print(json.dumps({"type": "system", "subtype": "init"}), flush=True)
 if mode == "fail":
     print(json.dumps({"type": "result", "is_error": True, "result": "API Error"}), flush=True)
 else:
-    print(json.dumps({"type": "result", "is_error": False, "result": "CLEANED: " + transcript}), flush=True)
+    print(json.dumps({"type": "result", "is_error": False, "result": os.environ.get("FAKE_CLAUDE_RESULT", "CLEANED: " + transcript)}), flush=True)
