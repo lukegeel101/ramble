@@ -8,3 +8,5 @@ recordings/
 models/
 dictate.log
 recorder/mic-record
+recorder/context-ocr
+workspace.json

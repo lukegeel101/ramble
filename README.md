@@ -67,7 +67,7 @@ My words, my order, my hedges and every detail stay.
 - **Faithful.** The cleanup is told never to summarize, reorder, add or drop anything; `lab.py` has a stronger model check that it didn't.
 - **Private.** Transcription is local; only the transcript text goes to the cleanup model.
 - **Cheap.** About $0.002 a dictation on Haiku, in Claude plan usage.
-- **Context-aware.** In a terminal or the Claude app it reads the last few messages of your Claude Code session, so "the second option" or "that PR" come out precise.
+- **Context-aware.** It reads recent text exposed by the focused terminal pane or supported Claude/GPT desktop conversation, using local window OCR when needed.
 - **Gets your names right.** A glossary of people, projects and tools fixes the words whisper always mishears.
 - **Never loses what you said.** If cleanup fails or is slow, the raw transcript is pasted instead, and one hotkey copies the last raw transcript at any time.
 
@@ -90,9 +90,9 @@ The details are in [docs/gotchas.md](docs/gotchas.md).
 
 - **Push to talk anywhere.** Control+Option+. starts recording and stops it again, from any app; a menu bar item shows idle, recording or working.
 - **Transcribes on your Mac.** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) runs locally with Metal; the audio never leaves the computer.
-- **Light-touch cleanup.** Claude Haiku removes fillers and false starts, fixes misheard words and adds punctuation, and is told never to summarize, reorder, add or drop anything. Only the transcript text is sent.
+- **Light-touch cleanup.** Claude Haiku removes fillers and false starts, fixes misheard words and adds punctuation, and is told never to summarize, reorder, add or drop anything. The transcript, enabled glossary, captured conversation context and relevant workspace vocabulary are sent as text; audio stays local.
 - **Pastes for you.** The result goes on the clipboard and is pasted with Command+V if the app you stopped in is still in front.
-- **Knows the conversation.** When you dictate into a terminal or the Claude app, the last few messages of your newest Claude Code session go along as reference, so "the second option" or "that PR" come out precise.
+- **Knows the conversation.** Recent text from the active terminal pane or supported Claude/GPT desktop conversation goes along as reference, with local OCR when Accessibility exposes no conversation text.
 - **Learns your names.** A glossary of people, projects and tools biases whisper toward the right spellings and lets the cleanup fix what is left.
 - **Never loses what you said.** If cleanup fails or is slow, the transcript is pasted as heard; Control+Option+Shift+. copies the last raw transcript at any time.
 - **A test bench.** `lab.py` runs a transcript through every variant of the pipeline and has a stronger model check whether the cleanup changed your meaning.
@@ -146,10 +146,42 @@ The whole file goes to the cleanup model, which uses it for spelling only and is
 
 ### Conversation context
 
-When you stop recording in a terminal, VS Code, Cursor or the Claude app, `context.py` reads the newest interactive Claude Code session written in the last two hours and sends up to 6 messages and 8,000 characters (about 2,000 tokens) ahead of the transcript.
-Headless `claude -p` runs are skipped, so background jobs never count as the conversation.
-It runs while whisper transcribes, so it adds no wait, and the prompt forbids copying anything from it that you did not say.
-`RAMBLE_CONTEXT_APPS` adds other apps by bundle ID.
+Ramble reads the destination that is active when you stop recording, using Hammerspoon's macOS Accessibility access.
+It never chooses a Claude or Codex session just because that session was updated most recently.
+
+| Destination | Context available |
+| --- | --- |
+| Terminal, iTerm2, WezTerm, Ghostty, Warp, kitty | Text exposed by the focused terminal text area, including available scrollback, regardless of whether Claude Code or Codex is running there. |
+| VS Code / Cursor terminal | Focused text area identified by Accessibility as a terminal; no editor or other split-pane scan. |
+| Claude, ChatGPT, Codex desktop | Accessible conversation text around the composer; local OCR of the active window when the app exposes no text. |
+| Browsers and other apps | No capture by default. |
+
+The default limit is 8,000 characters of recent text, with up to six text blocks when the app exposes paragraph boundaries.
+These are not guaranteed to be six complete messages: apps can virtualize older messages, terminal scrollback can be truncated, and OCR sees only the current window contents.
+Keep the relevant exchange visible for the best results.
+OCR can include interface labels and unsent text; the cleanup instructions treat all of it as uncertain reference material, not instructions.
+Context helps the cleanup model correct names and references after Whisper transcribes the audio; Whisper itself still uses the glossary hint.
+Short dictations also receive model cleanup when context is available.
+The cleanup instructions treat the complete spoken name as one identifier, preserving its contextual spelling without repeating a final word such as queue or cache.
+A local guard checks compound identifiers emitted by the model against the complete word sequence in the original dictation.
+If a name was substituted without that match, or cleanup added words beside it, Ramble falls back to local cleanup of the original and retains only fully supported identifier spellings.
+This check is deliberately conservative rather than phonetic: uncertain compound names can remain uncorrected.
+Other corrections remain model-based; a successful context capture does not by itself prove the rewrite is correct.
+
+Hammerspoon needs Accessibility permission.
+The local OCR fallback additionally needs Hammerspoon enabled in System Settings > Privacy & Security > Screen & System Audio Recording (called Screen Recording on some macOS versions).
+Images stay in memory, are recognized locally with Apple Vision, and are never saved or sent to the cleanup provider.
+Extracted context text accompanies your dictation to the configured cleanup provider, just as the previous Claude-session context did.
+The most recent extracted context is kept in `state/last-context.txt`, with owner-only permissions, for inspection.
+`RAMBLE_CONTEXT=0` disables capture and `RAMBLE_CONTEXT_OCR=0` disables only OCR.
+`RAMBLE_CONTEXT_APPS` adds explicit terminal bundle IDs; it does not enable arbitrary browser scraping.
+
+Hover over the microphone menu icon after dictating to see the last context source or reason it was unavailable.
+Run `python3 ~/.ramble/context.py --status` for a metadata-only diagnostic of the currently active app.
+`state/context-status.json` records the last dictation's result without conversation text.
+If the destination changes before capture, permission is missing, or the app exposes no readable text, dictation continues without context.
+Both Control+Option+. and Command+Option+. toggle recording.
+Auto-paste checks that the destination app and window are still active; stay in the same conversation until it finishes.
 
 ### Direct API
 
@@ -160,6 +192,14 @@ If `~/.config/ramble/anthropic-api-key` exists (one line, the key, `chmod 600`),
 
 On my MacBook Air, whisper's `small.en` model transcribes a typical sentence in 1 to 2 seconds after the first run of the day.
 The cleanup call through Claude Code carries about 8,300 tokens of fixed overhead, and the glossary and a full conversation context add a few thousand more; on Haiku that comes to about $0.002 a dictation in plan usage.
+
+## Slack channels and people
+
+Ramble can use a private workspace directory alongside the active conversation to recognize channel names, people's names and profile titles.
+It adds names to the local Whisper hint, selects relevant entries for cleanup, and protects recognized names from being replaced with unrelated phrases.
+The microphone tooltip shows directory counts separately from active-window capture status.
+See [workspace vocabulary](docs/workspace-vocabulary.md) for importing or refreshing the directory, privacy controls, and tests.
+Refresh is explicit through the connected Slack account, not automatic background synchronization.
 
 ## Test bench
 
@@ -183,7 +223,7 @@ flowchart LR
     H["Hammerspoon<br/>hotkey"] --> D["dictate.sh"]
     D --> M["recorder/mic-record<br/>(native Swift)"]
     M --> W["whisper-cli<br/>(local, Metal)"]
-    D -. "in parallel" .-> X["context.py<br/>newest Claude Code session"]
+    D -. "in parallel" .-> X["context.py<br/>active window: Accessibility or local OCR"]
     W --> C["cleanup.py"]
     X --> C
     C --> L["claude -p --model haiku<br/>(or the API)"]
@@ -203,6 +243,14 @@ python3 -m unittest discover -s tests -t .
 
 The tests run `dictate.sh`, `cleanup.py`, `context.py`, `lab.py` and `install.sh` against stand-ins in `tests/bin` (a fake `claude` that prints stream-json, a fake `whisper-cli`, a fake recorder and a `pbcopy` that writes to a file), so they need no microphone, no model and no Claude account, and never touch your clipboard.
 Known pitfalls are in [docs/gotchas.md](docs/gotchas.md).
+
+### Live identifier regression check
+
+`python3 tests/eval_context_spelling.py --live --repeats 3` runs synthetic identifier cases through the existing Claude CLI login.
+Use `--prompt structured` to check the optional structured cleanup prompt.
+The cases cover exact contextual spelling, duplicated suffixes, ordinary descriptions, different names, separately spoken nouns, and absent context.
+This opt-in check sends only the synthetic test sentences and context, disables the personal glossary, never reads saved dictations, and never touches the clipboard.
+It is separate from the offline CI suite and returns failure when an output differs from its expected wording.
 
 ## Uninstall
 

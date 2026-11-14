@@ -37,9 +37,11 @@ if "stream-json" not in args:
 
 line = sys.stdin.readline()
 content = json.loads(line)["message"]["content"]
+if os.environ.get("FAKE_CLAUDE_BODY"):
+    open(os.environ["FAKE_CLAUDE_BODY"], "w").write(content)
 transcript = re.search(r"<transcript>\n(.*)\n</transcript>", content, re.S).group(1)
 print(json.dumps({"type": "system", "subtype": "init"}), flush=True)
 if mode == "fail":
     print(json.dumps({"type": "result", "is_error": True, "result": "API Error"}), flush=True)
 else:
-    print(json.dumps({"type": "result", "is_error": False, "result": "CLEANED: " + transcript}), flush=True)
+    print(json.dumps({"type": "result", "is_error": False, "result": os.environ.get("FAKE_CLAUDE_RESULT", "CLEANED: " + transcript)}), flush=True)

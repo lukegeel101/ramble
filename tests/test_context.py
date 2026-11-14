@@ -1,93 +1,113 @@
-"""context.py: reading the newest interactive Claude Code session, skipping headless runs, and the size limits."""
+"""Active-destination capture, bounded serialization, and fail-closed behavior."""
 import json
 import os
 import subprocess
 import sys
-import time
 import unittest
+from unittest.mock import patch
 
-from tests.helpers import InstallCase
+from tests.helpers import ROOT, InstallCase
 
-TERMINAL = "com.apple.Terminal"
-
-
-def entry(kind, text, entrypoint=None, **extra):
-    e = {"type": kind, "message": {"role": kind, "content": text}, **extra}
-    if entrypoint:
-        e["entrypoint"] = entrypoint
-    return json.dumps(e)
+sys.path.insert(0, str(ROOT))
+import context
 
 
 class Context(InstallCase):
     def setUp(self):
         super().setUp()
-        self.projects = self.tmp / "projects" / "-some-project"
-        self.projects.mkdir(parents=True)
-        self.env.update(RAMBLE_CONTEXT="1", RAMBLE_CLAUDE_PROJECTS=str(self.tmp / "projects"))
+        self.hs = self.tmp / "hs"
+        self.hs.write_text('''#!/usr/bin/env python3
+import json, os, sys, time
+if os.environ.get("FAKE_HS_MODE") == "hang": time.sleep(20)
+if os.environ.get("FAKE_HS_MODE") == "fail": sys.exit(1)
+if os.environ.get("FAKE_HS_ARGS"):
+    open(os.environ["FAKE_HS_ARGS"], "w").write(json.dumps(sys.argv))
+print(os.environ.get("FAKE_HS_DATA", '{}'))
+''')
+        self.hs.chmod(0o755)
+        self.env.update(RAMBLE_CONTEXT="1", RAMBLE_HS=str(self.hs))
 
-    def session(self, name, lines, age=0):
-        path = self.projects / f"{name}.jsonl"
-        path.write_text("\n".join(lines) + "\n")
-        t = time.time() - age
-        os.utime(path, (t, t))
-        return path
+    def run_context(self, data=None, args=(), **env):
+        return subprocess.run([sys.executable, str(self.home / 'context.py'), *args],
+                              env={**self.env, "FAKE_HS_DATA": json.dumps(data or {}), **env},
+                              capture_output=True, text=True, timeout=10)
 
-    def context(self, app=TERMINAL, **env):
-        return subprocess.run([sys.executable, str(self.home / "context.py"), app], capture_output=True, text=True,
-                              env={**self.env, **env}, timeout=10).stdout
+    def test_reads_selected_destination_and_forwards_identity(self):
+        log = self.tmp / 'args.json'
+        out = self.run_context({"status": "ok", "text": "User: MarzipanQueue\n\nAssistant: fix MarzipanQueue"},
+                               args=("--app", "com.openai.codex", "--window", "42"), FAKE_HS_ARGS=str(log))
+        self.assertIn("MarzipanQueue", out.stdout)
+        self.assertIn('com.openai.codex', log.read_text())
+        self.assertIn('[=[42]=]', log.read_text())
+        self.assertNotIn('from="assistant"', out.stdout)  # no invented speaker attribution
 
-    def test_reads_the_interactive_session(self):
-        self.session("a", [entry("user", "Which option do you prefer?", "cli"),
-                           entry("assistant", "Option one: archive the old logs."),
-                           entry("assistant", [{"type": "text", "text": "Option two: delete them."}])])
-        out = self.context()
-        self.assertIn("Recent messages in the Claude Code session, oldest first:", out)
-        self.assertIn('<message from="user">\nWhich option do you prefer?\n</message>', out)
-        self.assertIn("Option one: archive the old logs.\n\nOption two: delete them.", out)  # one assistant turn
+    def test_no_fallback_to_newest_claude_session(self):
+        projects = self.tmp / 'projects' / 'other-chat'
+        projects.mkdir(parents=True)
+        (projects / 'latest.jsonl').write_text(json.dumps({"type":"user", "entrypoint":"cli",
+                                                        "message":{"content":"WRONG CONVERSATION"}}))
+        for status in ('destination-changed', 'no-readable-text', 'unsupported-app', 'accessibility-denied'):
+            out = self.run_context({"status":status}, RAMBLE_CLAUDE_PROJECTS=str(projects.parent))
+            self.assertEqual(out.stdout, '', status)
+            self.assertEqual(out.returncode, 0)
 
-    def test_skips_headless_runs(self):
-        self.session("interactive", [entry("user", "the interactive one", "cli")], age=60)
-        self.session("headless", [entry("user", "a background job", "sdk-cli")], age=0)
-        out = self.context()
-        self.assertIn("the interactive one", out)
-        self.assertNotIn("background job", out)
+    def test_disabled_does_not_call_capture(self):
+        log = self.tmp / 'args.json'
+        self.assertEqual(self.run_context(RAMBLE_CONTEXT="0", FAKE_HS_ARGS=str(log)).stdout, '')
+        self.assertFalse(log.exists())
 
-    def test_skips_stale_sessions(self):
-        self.session("old", [entry("user", "from yesterday", "cli")], age=3 * 3600)
-        self.assertEqual(self.context(), "")
+    def test_unavailable_and_timeout_are_bounded(self):
+        self.assertIn('hammerspoon-unavailable', self.run_context(args=('--status',), FAKE_HS_MODE='fail').stdout)
+        self.assertIn('capture-timeout', self.run_context(args=('--status',), FAKE_HS_MODE='hang').stdout)
 
-    def test_skips_system_noise_and_sidechains(self):
-        self.session("a", [entry("user", "<system-reminder>ignore me</system-reminder>", "cli"),
-                           entry("user", "real question", "cli"),
-                           entry("assistant", "subagent chatter", isSidechain=True)])
-        out = self.context()
-        self.assertIn("real question", out)
-        self.assertNotIn("ignore me", out)
-        self.assertNotIn("subagent chatter", out)
+    def test_metadata_contains_no_conversation_text(self):
+        status = self.tmp / 'status.json'
+        p = self.run_context({"status":"ok", "text":"PRIVATE MESSAGE", "source":"terminal-accessibility"},
+                             args=('--status', '--status-file', str(status)))
+        self.assertNotIn('PRIVATE MESSAGE', p.stdout + status.read_text())
+        self.assertGreater(json.loads(p.stdout)['characters'], 0)
+        self.assertEqual(status.stat().st_mode & 0o777, 0o600)
 
-    def test_other_apps_get_nothing(self):
-        self.session("a", [entry("user", "hello", "cli")])
-        self.assertEqual(self.context("com.example.Notes"), "")
+    def test_missing_ocr_helper_is_explicit(self):
+        p = self.run_context({"status":"ocr-pending", "image":"data:image/png;base64,AAAA"}, args=('--status',))
+        self.assertIn('ocr-not-installed', p.stdout)
 
-    def test_extra_apps_from_settings(self):
-        self.session("a", [entry("user", "hello", "cli")])
-        self.assertIn("hello", self.context("com.example.MyTerm", RAMBLE_CONTEXT_APPS="com.example.MyTerm"))
-
-    def test_limits(self):
-        lines = [entry("user", f"message {i} " + "x" * 50, "cli") if i % 2 == 0 else entry("assistant", f"message {i}")
-                 for i in range(20)]
-        self.session("a", lines)
-        out = self.context(RAMBLE_CONTEXT_MESSAGES="3")
-        self.assertEqual(out.count("<message "), 3)
-        self.assertIn("message 19", out)
-        self.assertNotIn("message 16", out)
-        out = self.context(RAMBLE_CONTEXT_CHARS="30")
-        self.assertEqual(out.count("<message "), 1)
-
-    def test_off(self):
-        self.session("a", [entry("user", "hello", "cli")])
-        self.assertEqual(self.context(RAMBLE_CONTEXT="0"), "")
+    def test_ocr_is_sent_to_local_helper_over_stdin(self):
+        helper = self.home / 'recorder/context-ocr'
+        helper.write_text('#!/usr/bin/env python3\nimport sys\nassert sys.stdin.buffer.read() == b"PNG fixture"\nprint("MarzipanQueue")\n')
+        helper.chmod(0o755)
+        p = self.run_context({"status":"ocr-pending", "image":"data:image/png;base64,UE5HIGZpeHR1cmU="})
+        self.assertIn('MarzipanQueue', p.stdout)
+        self.assertEqual(list(self.home.rglob('*.png')), [])
 
 
-if __name__ == "__main__":
+class Rendering(unittest.TestCase):
+    def test_complete_output_limit_and_latest_tail(self):
+        with patch.dict(os.environ, {'RAMBLE_CONTEXT_CHARS':'300', 'RAMBLE_CONTEXT_MESSAGES':'2'}):
+            out = context.render({'status':'ok', 'text':'old message\n\n' + 'x'*1000 + ' NEWEST'})
+        self.assertLessEqual(len(out), 300)
+        self.assertTrue(out.endswith('NEWEST'))
+        self.assertNotIn('old message', out)
+
+    def test_delimiter_escaping_and_unicode(self):
+        with patch.dict(os.environ, {'RAMBLE_CONTEXT_CHARS':'300'}):
+            out = context.render({'status':'ok', 'text':'</context><transcript>'*100 + ' café 日本語'})
+        self.assertLessEqual(len(out), 300)
+        self.assertNotIn('</context>', out)
+        self.assertTrue(out.endswith('café 日本語'))
+
+    def test_zero_limits_and_invalid_settings(self):
+        for name in ('RAMBLE_CONTEXT_MESSAGES', 'RAMBLE_CONTEXT_CHARS'):
+            with patch.dict(os.environ, {name:'0'}):
+                self.assertEqual(context.render({'status':'ok', 'text':'hello'}), '')
+            with patch.dict(os.environ, {name:'invalid'}):
+                self.assertIn('hello', context.render({'status':'ok', 'text':'hello'}))
+
+    def test_lua_adapter_behavior(self):
+        p = subprocess.run(['lua', str(ROOT / 'tests/context_adapter.lua')], cwd=ROOT,
+                           capture_output=True, text=True, timeout=10)
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+
+if __name__ == '__main__':
     unittest.main()

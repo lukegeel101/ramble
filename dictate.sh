@@ -14,6 +14,7 @@
 # answer BUSY instead of starting a new recording. Each recording has its own file, so a new
 # recording can never delete or move the one being transcribed.
 set -u
+umask 077
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE="$HERE/state"; REC="$HERE/recordings"; LOG="$HERE/dictate.log"
 mkdir -p "$STATE" "$REC"
@@ -102,18 +103,29 @@ start() {
 stop() {
   if ! recording; then echo "IDLE"; exit 0; fi
   local pid wav text words
+  # Pin context to the stop-press destination, before recorder shutdown and transcription.
+  local ctx="$STATE/context.txt" ctxpid=""
+  : > "$ctx"
+  : > "$STATE/last-context.txt"
+  chmod 600 "$ctx" "$STATE/last-context.txt"
+  printf '{"status":"disabled","characters":0}\n' > "$STATE/context-status.json"
+  if [ "$CONTEXT" = "1" ]; then
+    "$PYTHON" "$HERE/context.py" --app "${2:-}" --window "${3:-}" \
+      --status-file "$STATE/context-status.json" > "$ctx" 2>>"$LOG" & ctxpid=$!
+  fi
   pid="$(cat "$PIDFILE")"
   wav="$(cat "$WAVPATH" 2>/dev/null)"; [ -n "$wav" ] || wav="$REC/current.wav"
   rm -f "$PIDFILE" "$WAVPATH"
   kill -INT "$pid" 2>/dev/null
   for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
   kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
-  if [ ! -s "$wav" ]; then log "no audio captured ($wav)"; echo "ERROR: no audio captured"; exit 1; fi
+  if [ ! -s "$wav" ]; then [ -n "$ctxpid" ] && wait "$ctxpid"; log "no audio captured ($wav)"; echo "ERROR: no audio captured"; exit 1; fi
   # Pure digital silence from the native recorder means macOS gave it no microphone; use ffmpeg next time.
   if [ "$(cat "$STATE/recorder" 2>/dev/null)" = "native" ] && command -v ffmpeg >/dev/null; then
     local peak
     peak="$(ffmpeg -nostdin -hide_banner -i "$wav" -af volumedetect -f null - 2>&1 | sed -n 's/.*max_volume: \(-*[0-9.]*\) dB.*/\1/p')"
     if [ -n "$peak" ] && [ "${peak%.*}" -le -85 ]; then
+      [ -n "$ctxpid" ] && wait "$ctxpid"
       touch "$STATE/native-silent"; mv -f "$wav" "$REC/last.wav"
       log "native recorder captured only silence (max ${peak} dB; microphone permission?); next dictations use ffmpeg"
       echo "ERROR: the recorder heard nothing (microphone permission?). The next dictation uses ffmpeg; please say it again."
@@ -121,10 +133,6 @@ stop() {
     fi
   fi
   log "recording stopped ($(( $(stat -f %z "$wav") / 32000 ))s)"
-  # The conversation being dictated into (the app in front now), read while whisper runs; see context.py.
-  local ctx="$STATE/context.txt" ctxpid=""
-  : > "$ctx"
-  if [ "$CONTEXT" = "1" ]; then "$PYTHON" "$HERE/context.py" > "$ctx" 2>>"$LOG" & ctxpid=$!; fi
   # whisper-cli prints about eight lines of start-up per run; they reach the log only when a run fails.
   local werr="$STATE/whisper.err" hint=()
   [ "$HINT" = "1" ] && hint=(--prompt "$("$PYTHON" "$HERE/cleanup.py" hint 2>/dev/null)")
@@ -134,12 +142,13 @@ stop() {
   mv -f "$wav" "$REC/last.wav"
   find "$REC" -name 'rec-*.wav' -mmin +1440 -delete 2>/dev/null
   trim_log
+  [ -n "$ctxpid" ] && wait "$ctxpid"
+  cp "$ctx" "$STATE/last-context.txt" 2>/dev/null
   if [ -z "$text" ]; then cat "$werr" >> "$LOG"; log "empty transcript"; echo "ERROR: nothing heard"; exit 1; fi
   printf '%s' "$text" > "$STATE/last-raw.txt"
   words="$(printf '%s' "$text" | wc -w | tr -d ' ')"
-  [ -n "$ctxpid" ] && wait "$ctxpid"
-  cp "$ctx" "$STATE/last-context.txt" 2>/dev/null
-  if [ "$CLEANUP" = "1" ] && [ "$words" -ge "$CLEANUP_MIN_WORDS" ]; then
+  if [ "$CLEANUP" = "1" ] && { [ "$words" -ge "$CLEANUP_MIN_WORDS" ] || [ -s "$ctx" ] \
+      || printf '%s' "$text" | "$PYTHON" "$HERE/workspace.py" has-match; }; then
     local clean
     if clean="$(cleanup "$text" "$ctx")"; then
       printf '%s' "$clean" > "$STATE/last-clean.txt"
@@ -193,9 +202,9 @@ busy() { log "pressed while busy; ignored"; echo "BUSY"; exit 0; }
 
 case "${1:-toggle}" in
   start) lock || busy; start ;;
-  stop) lock || busy; stop ;;
+  stop) lock || busy; stop "$@" ;;
   status) if locked; then echo "BUSY"; elif recording; then echo "RECORDING"; else echo "IDLE"; fi ;;
-  toggle) lock || busy; if recording; then stop; else start; fi ;;
+  toggle) lock || busy; if recording; then stop "$@"; else start; fi ;;
   raw) raw ;;
   *) echo "usage: dictate.sh toggle|start|stop|status|raw"; exit 2 ;;
 esac

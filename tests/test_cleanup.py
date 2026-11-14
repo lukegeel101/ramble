@@ -28,6 +28,59 @@ class Strip(unittest.TestCase):
         self.assertEqual(cleanup.strip("um"), "um")
 
 
+class ContextNameGuard(unittest.TestCase):
+    def check(self, raw, rewrite, expected, context="The component is named CopperFinchQueue."):
+        self.assertEqual(cleanup.guard_context_names(raw, rewrite, context), expected)
+
+    def test_duplicate_suffix_consumes_spoken_name_once(self):
+        self.check("Please check the copper finch queue.", "Please check the CopperFinchQueue queue.",
+                   "Please check the CopperFinchQueue.")
+
+    def test_context_label_cannot_be_added(self):
+        self.check("Please restart the Silver Otter cache.", "Please restart the SilverOtterCache service.",
+                   "Please restart the SilverOtterCache.", "The service is named SilverOtterCache.")
+
+    def test_different_name_is_not_replaced(self):
+        self.check("Please restart the Golden Otter cache.", "Please restart the SilverOtterCache service.",
+                   "Please restart the Golden Otter cache.", "The service is named SilverOtterCache.")
+
+    def test_ordinary_description_is_not_completed_into_identifier(self):
+        self.check("I saw a copper finch in the garden.", "I saw a CopperFinchQueue in the garden.",
+                   "I saw a copper finch in the garden.")
+
+    def test_valid_name_and_later_noun_are_kept(self):
+        self.check("Check the copper finch queue and inspect the queue.",
+                   "Check the CopperFinchQueue and inspect the queue.",
+                   "Check the CopperFinchQueue and inspect the queue.")
+
+    def test_explicit_label_is_kept(self):
+        self.check("Check the copper finch queue service.", "Check the CopperFinchQueue service.",
+                   "Check the CopperFinchQueue service.")
+
+    def test_partial_joining_is_recognized(self):
+        self.check("Check the CopperFinch queue.", "Check the CopperFinchQueue.", "Check the CopperFinchQueue.")
+
+    def test_ambiguous_context_spelling_is_not_chosen(self):
+        self.check("Check the http server.", "Check the HTTPServer.", "Check the http server.",
+                   "Compare HTTPServer and HttpServer.")
+
+    def test_exact_spelling_in_raw_wins_over_ambiguity(self):
+        self.check("Check HTTPServer.", "Check HTTPServer.", "Check HTTPServer.",
+                   "Compare HTTPServer and HttpServer.")
+
+    def test_added_identifier_occurrence_is_rejected(self):
+        self.check("Check the copper finch queue.", "Check the CopperFinchQueue and restart CopperFinchQueue.",
+                   "Check the copper finch queue.")
+
+    def test_no_context_keeps_model_cleanup(self):
+        self.check("um check grafana", "Check Grafana.", "Check Grafana.", "")
+
+    def test_other_spelling_corrections_remain_available(self):
+        self.check("Check graph anna and then restart copper finch queue.",
+                   "Check Grafana and then restart CopperFinchQueue.",
+                   "Check Grafana and then restart CopperFinchQueue.")
+
+
 class Message(unittest.TestCase):
     def test_transcript_only(self):
         self.assertEqual(cleanup.message("hello there", ""), "<transcript>\nhello there\n</transcript>\n")
@@ -86,6 +139,15 @@ class Cli(InstallCase):
         self.assertEqual(args[args.index("--tools") + 1], "")
         self.assertIn("--no-session-persistence", args)
         self.assertIn("\n<glossary>\n", args[args.index("--system-prompt") + 1])
+
+    def test_run_checks_names_before_returning_model_output(self):
+        path = self.tmp / "context.txt"
+        path.write_text("The component is named CopperFinchQueue.")
+        result = self.cli("run", str(path), stdin="Please check the copper finch queue.",
+                          FAKE_CLAUDE_RESULT="Please check the CopperFinchQueue queue.")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "Please check the CopperFinchQueue.")
+        self.assertIn("rejected unsupported contextual name", result.stderr)
 
     def test_run_fails_when_every_attempt_fails(self):
         p = self.cli("run", stdin="please check the build", FAKE_CLAUDE_MODE="fail")

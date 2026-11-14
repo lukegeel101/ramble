@@ -10,7 +10,7 @@ from tests.helpers import InstallCase
 SPOKEN = "okay so um can you check whether the Grafana alerts fired last night and tell me which ones"
 
 
-class Dictate(InstallCase):
+class DictateHarness(InstallCase):
     def sh(self, *args, **env):
         return subprocess.run(["/bin/bash", str(self.home / "dictate.sh"), *args], capture_output=True, text=True,
                               env={**self.env, "FAKE_WHISPER_TEXT": SPOKEN, **env}, timeout=60)
@@ -32,6 +32,8 @@ class Dictate(InstallCase):
         self.assertFalse(os.path.exists(self.env["FAKE_PBCOPY_FILE"]), "the real clipboard command was reached")
         super().tearDown()
 
+
+class Dictate(DictateHarness):
     def test_full_dictation_is_cleaned_and_copied(self):
         p = self.dictate()
         self.assertEqual(p.stdout.strip(), f"COPIED: CLEANED: {SPOKEN}")
@@ -41,6 +43,19 @@ class Dictate(InstallCase):
         self.assertEqual(self.sh("status").stdout.strip(), "IDLE")
         log = (self.home / "dictate.log").read_text()
         self.assertIn("recording started (native)", log)
+
+    def test_context_reaches_cleanup_even_for_short_dictation(self):
+        hs = self.tmp / "hs"
+        hs.write_text("#!/usr/bin/env python3\nprint('{\"status\":\"ok\",\"source\":\"terminal-accessibility\",\"text\":\"Assistant: rename MarzipanQueue\"}')\n")
+        hs.chmod(0o755)
+        body = self.tmp / "body.txt"
+        p = self.dictate(RAMBLE_CONTEXT="1", RAMBLE_HS=str(hs), FAKE_WHISPER_TEXT="fix marzipan queue",
+                         FAKE_CLAUDE_BODY=str(body))
+        self.assertIn("COPIED: CLEANED:", p.stdout)
+        self.assertIn("MarzipanQueue", body.read_text())
+        self.assertIn("<context>", body.read_text())
+        self.assertEqual(self.sh("status").stdout.strip(), "IDLE")
+        self.assertEqual((self.home / "state/last-context.txt").stat().st_mode & 0o777, 0o600)
 
     def test_whisper_gets_the_glossary_hint(self):
         self.dictate()

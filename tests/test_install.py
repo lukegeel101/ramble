@@ -28,8 +28,9 @@ class Install(unittest.TestCase):
 
     def test_layout_and_hammerspoon(self):
         self.install()
-        for name in ("dictate.sh", "cleanup.py", "context.py", "lab.py", "config", "glossary.md",
-                     "prompts/cleanup.md", "prompts/cleanup-structured.md", "prompts/meaning.md"):
+        for name in ("dictate.sh", "cleanup.py", "context.py", "workspace.py", "lab.py", "config", "glossary.md",
+                     "prompts/cleanup.md", "prompts/cleanup-structured.md", "prompts/meaning.md",
+                     "hammerspoon/context.lua", "recorder/context-ocr.swift"):
             self.assertTrue((self.dest / name).exists(), name)
         self.assertTrue(os.access(self.dest / "dictate.sh", os.X_OK))
         init = (self.hs / "init.lua").read_text()
@@ -43,9 +44,11 @@ class Install(unittest.TestCase):
         self.install()
         (self.dest / "config").write_text("RAMBLE_CLEANUP=0\n")
         (self.dest / "glossary.md").write_text("# mine\n")
+        (self.dest / "workspace.json").write_text('{"private": "directory"}')
         self.install()
         self.assertEqual((self.dest / "config").read_text(), "RAMBLE_CLEANUP=0\n")
         self.assertEqual((self.dest / "glossary.md").read_text(), "# mine\n")
+        self.assertEqual((self.dest / "workspace.json").read_text(), '{"private": "directory"}')
         self.assertEqual((self.hs / "init.lua").read_text().count('require("ramble")'), 1)
 
     def test_fresh_hammerspoon(self):

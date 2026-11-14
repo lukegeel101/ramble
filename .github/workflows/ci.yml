@@ -10,7 +10,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: brew install shellcheck lua
       - run: shellcheck dictate.sh install.sh tests/bin/whisper-cli tests/bin/pbcopy
-      - run: python3 -m py_compile cleanup.py context.py lab.py tests/bin/claude tests/fake-mic-record
-      - run: luac -p hammerspoon/ramble.lua
+      - run: python3 -m py_compile cleanup.py context.py workspace.py lab.py tests/bin/claude tests/fake-mic-record
+      - run: luac -p hammerspoon/ramble.lua hammerspoon/context.lua tests/context_adapter.lua
       - run: swiftc -O recorder/mic-record.swift -o "$RUNNER_TEMP/mic-record"
+      - run: swiftc -O recorder/context-ocr.swift -o "$RUNNER_TEMP/context-ocr"
       - run: python3 -m unittest discover -s tests -t . -v
