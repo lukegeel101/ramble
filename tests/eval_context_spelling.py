@@ -41,7 +41,7 @@ def main():
     failures = 0
     with tempfile.TemporaryDirectory(prefix="ramble-spelling-eval-") as tmp:
         env = {k: v for k, v in os.environ.items() if not k.startswith("RAMBLE_")}
-        env.update(RAMBLE_GLOSSARY="0", RAMBLE_API_KEY_FILE=str(Path(tmp) / "no-key"), RAMBLE_PROMPT=args.prompt)
+        env.update(RAMBLE_GLOSSARY="0", RAMBLE_WORKSPACE="0", RAMBLE_API_KEY_FILE=str(Path(tmp) / "no-key"), RAMBLE_PROMPT=args.prompt)
         for label, context, raw, expected in cases:
             acceptable = {expected}
             if args.prompt == "structured" and expected.startswith("Please "):

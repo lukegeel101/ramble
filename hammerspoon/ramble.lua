@@ -40,9 +40,21 @@ local function contextStatus()
   if value.status == "ok" then return "Context: " .. (value.source or "active window") .. " (" .. tostring(value.characters) .. " characters)" end
   return "Context: " .. (value.status or "unavailable")
 end
+local function workspaceStatus()
+  local f = io.open(home .. "/state/workspace-status.json", "r")
+  if not f then return "Workspace vocabulary: not checked yet" end
+  local raw = f:read("*a"); f:close()
+  local ok, value = pcall(hs.json.decode, raw)
+  if not ok or type(value) ~= "table" then return "Workspace vocabulary: unavailable" end
+  if value.status == "ready" then
+    return "Workspace vocabulary: " .. tostring(value.channels or 0) .. " channels, "
+      .. tostring(value.people or 0) .. " people (" .. tostring(value.selected or 0) .. " used)"
+  end
+  return "Workspace vocabulary: " .. (value.status or "unavailable")
+end
 local function setIdle()
   if working then hs.alert.closeSpecific(working); working = nil end
-  if menu then menu:setTitle("🎙"); menu:setTooltip("Dictation idle (Control+Option+. or Command+Option+.)\n" .. contextStatus()) end
+  if menu then menu:setTitle("🎙"); menu:setTooltip("Dictation idle (Control+Option+. or Command+Option+.)\n" .. contextStatus() .. "\n" .. workspaceStatus()) end
 end
 local function setRecording()
   if menu then menu:setTitle("🔴 REC"); menu:setTooltip("Recording: Control+Option+. to stop") end

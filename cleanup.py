@@ -29,6 +29,7 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+import workspace
 
 HERE = Path(__file__).resolve().parent
 GLOSSARY = HERE / "glossary.md"
@@ -80,12 +81,17 @@ def system_prompt():
 
 def hint():
     """The text under "## Transcriber hint" in glossary.md, on one line, or nothing."""
-    if not GLOSSARY.is_file():
-        return ""
-    section = re.search(r"^## Transcriber hint\s*\n(.*?)(?=^## |\Z)", GLOSSARY.read_text(errors="replace"), re.M | re.S)
-    if not section:
-        return ""
-    return " ".join(section.group(1).split())[:HINT_CHARS]
+    glossary = ""
+    if GLOSSARY.is_file() and os.environ.get("RAMBLE_GLOSSARY", "1") != "0":
+        section = re.search(r"^## Transcriber hint\s*\n(.*?)(?=^## |\Z)", GLOSSARY.read_text(errors="replace"), re.M | re.S)
+        if section:
+            glossary = " ".join(section.group(1).split())
+    directory, state = workspace.load()
+    workspace.record_status(directory, state, 0)
+    vocabulary = workspace.hint(directory, HINT_CHARS // 2 if glossary else HINT_CHARS)
+    if not vocabulary:
+        return glossary[:HINT_CHARS]
+    return (vocabulary + ". " + glossary[:HINT_CHARS - len(vocabulary) - 2]).rstrip(". ")
 
 
 def read_context(context_file):
@@ -295,10 +301,17 @@ def run(context_file):
     if not text:
         return 1
     context = read_context(context_file)
-    result = race(message(text, context_file, context))
+    directory, state = workspace.load()
+    vocabulary, count = workspace.reference(directory, text)
+    workspace.record_status(directory, state, count)
+    result = race(vocabulary + message(text, context_file, context))
     if not result:
         return 1
-    sys.stdout.write(guard_context_names(text, result, context))
+    result = guard_context_names(text, result, context)
+    if not workspace.preserves_names(directory, text, result):
+        log("rejected cleanup that changed a recognized workspace name")
+        result = strip(text)
+    sys.stdout.write(result)
     return 0
 
 

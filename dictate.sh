@@ -147,7 +147,8 @@ stop() {
   if [ -z "$text" ]; then cat "$werr" >> "$LOG"; log "empty transcript"; echo "ERROR: nothing heard"; exit 1; fi
   printf '%s' "$text" > "$STATE/last-raw.txt"
   words="$(printf '%s' "$text" | wc -w | tr -d ' ')"
-  if [ "$CLEANUP" = "1" ] && { [ "$words" -ge "$CLEANUP_MIN_WORDS" ] || [ -s "$ctx" ]; }; then
+  if [ "$CLEANUP" = "1" ] && { [ "$words" -ge "$CLEANUP_MIN_WORDS" ] || [ -s "$ctx" ] \
+      || printf '%s' "$text" | "$PYTHON" "$HERE/workspace.py" has-match; }; then
     local clean
     if clean="$(cleanup "$text" "$ctx")"; then
       printf '%s' "$clean" > "$STATE/last-clean.txt"

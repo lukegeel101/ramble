@@ -67,7 +67,7 @@ My words, my order, my hedges and every detail stay.
 - **Faithful.** The cleanup is told never to summarize, reorder, add or drop anything; `lab.py` has a stronger model check that it didn't.
 - **Private.** Transcription is local; only the transcript text goes to the cleanup model.
 - **Cheap.** About $0.002 a dictation on Haiku, in Claude plan usage.
-- **Context-aware.** In a terminal or the Claude app it reads the last few messages of your Claude Code session, so "the second option" or "that PR" come out precise.
+- **Context-aware.** It reads recent text exposed by the focused terminal pane or supported Claude/GPT desktop conversation, using local window OCR when needed.
 - **Gets your names right.** A glossary of people, projects and tools fixes the words whisper always mishears.
 - **Never loses what you said.** If cleanup fails or is slow, the raw transcript is pasted instead, and one hotkey copies the last raw transcript at any time.
 
@@ -90,9 +90,9 @@ The details are in [docs/gotchas.md](docs/gotchas.md).
 
 - **Push to talk anywhere.** Control+Option+. starts recording and stops it again, from any app; a menu bar item shows idle, recording or working.
 - **Transcribes on your Mac.** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) runs locally with Metal; the audio never leaves the computer.
-- **Light-touch cleanup.** Claude Haiku removes fillers and false starts, fixes misheard words and adds punctuation, and is told never to summarize, reorder, add or drop anything. Only the transcript text is sent.
+- **Light-touch cleanup.** Claude Haiku removes fillers and false starts, fixes misheard words and adds punctuation, and is told never to summarize, reorder, add or drop anything. The transcript, enabled glossary, captured conversation context and relevant workspace vocabulary are sent as text; audio stays local.
 - **Pastes for you.** The result goes on the clipboard and is pasted with Command+V if the app you stopped in is still in front.
-- **Knows the conversation.** When you dictate into a terminal or the Claude app, the last few messages of your newest Claude Code session go along as reference, so "the second option" or "that PR" come out precise.
+- **Knows the conversation.** Recent text from the active terminal pane or supported Claude/GPT desktop conversation goes along as reference, with local OCR when Accessibility exposes no conversation text.
 - **Learns your names.** A glossary of people, projects and tools biases whisper toward the right spellings and lets the cleanup fix what is left.
 - **Never loses what you said.** If cleanup fails or is slow, the transcript is pasted as heard; Control+Option+Shift+. copies the last raw transcript at any time.
 - **A test bench.** `lab.py` runs a transcript through every variant of the pipeline and has a stronger model check whether the cleanup changed your meaning.
@@ -192,6 +192,14 @@ If `~/.config/ramble/anthropic-api-key` exists (one line, the key, `chmod 600`),
 
 On my MacBook Air, whisper's `small.en` model transcribes a typical sentence in 1 to 2 seconds after the first run of the day.
 The cleanup call through Claude Code carries about 8,300 tokens of fixed overhead, and the glossary and a full conversation context add a few thousand more; on Haiku that comes to about $0.002 a dictation in plan usage.
+
+## Slack channels and people
+
+Ramble can use a private workspace directory alongside the active conversation to recognize channel names, people's names and profile titles.
+It adds names to the local Whisper hint, selects relevant entries for cleanup, and protects recognized names from being replaced with unrelated phrases.
+The microphone tooltip shows directory counts separately from active-window capture status.
+See [workspace vocabulary](docs/workspace-vocabulary.md) for importing or refreshing the directory, privacy controls, and tests.
+Refresh is explicit through the connected Slack account, not automatic background synchronization.
 
 ## Test bench
 

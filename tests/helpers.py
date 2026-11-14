@@ -12,7 +12,7 @@ BIN = ROOT / "tests" / "bin"
 
 def make_install(dest: Path, glossary=True):
     """Copy the scripts into dest the way install.sh lays them out, with the fake recorder."""
-    for name in ("dictate.sh", "cleanup.py", "context.py", "lab.py"):
+    for name in ("dictate.sh", "cleanup.py", "context.py", "workspace.py", "lab.py"):
         shutil.copy2(ROOT / name, dest / name)
     shutil.copytree(ROOT / "prompts", dest / "prompts")
     shutil.copytree(ROOT / "hammerspoon", dest / "hammerspoon")

@@ -10,7 +10,7 @@ from tests.helpers import InstallCase
 SPOKEN = "okay so um can you check whether the Grafana alerts fired last night and tell me which ones"
 
 
-class Dictate(InstallCase):
+class DictateHarness(InstallCase):
     def sh(self, *args, **env):
         return subprocess.run(["/bin/bash", str(self.home / "dictate.sh"), *args], capture_output=True, text=True,
                               env={**self.env, "FAKE_WHISPER_TEXT": SPOKEN, **env}, timeout=60)
@@ -32,6 +32,8 @@ class Dictate(InstallCase):
         self.assertFalse(os.path.exists(self.env["FAKE_PBCOPY_FILE"]), "the real clipboard command was reached")
         super().tearDown()
 
+
+class Dictate(DictateHarness):
     def test_full_dictation_is_cleaned_and_copied(self):
         p = self.dictate()
         self.assertEqual(p.stdout.strip(), f"COPIED: CLEANED: {SPOKEN}")

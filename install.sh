@@ -50,7 +50,7 @@ fi
 
 say "Installing into $DEST"
 mkdir -p "$DEST/prompts" "$DEST/recorder" "$DEST/models" "$DEST/state" "$DEST/recordings" "$DEST/hammerspoon"
-install -m 755 "$SRC/dictate.sh" "$SRC/cleanup.py" "$SRC/context.py" "$SRC/lab.py" "$DEST/"
+install -m 755 "$SRC/dictate.sh" "$SRC/cleanup.py" "$SRC/context.py" "$SRC/workspace.py" "$SRC/lab.py" "$DEST/"
 install -m 644 "$SRC"/prompts/*.md "$DEST/prompts/"
 install -m 644 "$SRC/recorder/"*.swift "$DEST/recorder/"
 install -m 644 "$SRC/hammerspoon/context.lua" "$DEST/hammerspoon/"

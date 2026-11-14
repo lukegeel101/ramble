@@ -2,6 +2,37 @@
 
 Problems hit while building Ramble, and their verified fixes.
 
+## Hammerspoon reload invalidates the CLI message port
+
+- **Symptom:** `hs -c 'hs.reload()'` returned exit 69 with a message-port invalidation error.
+- **Root cause:** Reloading Hammerspoon tears down the IPC connection that requested the reload.
+- **Fix:** Verify the newly loaded module in a fresh CLI call rather than treating the old connection closing as a load failure.
+- **Verified:** 2026-11-14: the subsequent call reported `package.loaded.ramble` present, Accessibility and Screen Recording enabled, and the installed dictation script idle.
+
+## Spoken workspace names become unrelated phrases
+
+- **Symptom:** A spoken channel such as `call center ops` could become `call systems`, and people outside the visible conversation had no directory context.
+- **Root cause:** Active-window context and the handwritten glossary supplied no maintained channel/person directory; the compound-identifier guard covered CamelCase identifiers only.
+- **Fix:** Add a private validated workspace import, bounded local vocabulary retrieval, a shared Whisper hint budget, short-dictation routing, and a local guard preserving recognized channel/person phrases.
+  Refresh via the verified Slack connector's joined-channel directory and member profiles; never read messages to construct this vocabulary.
+- **Verified:** 2026-11-14: the full fixture dictation path rejects an injected `call systems` rewrite, and generated speech passed through real Whisper and Claude with `call-center-ops` preserved in the file clipboard.
+  Live fictional cases passed in both cleanup modes; import identity, permissions, malformed data and negative matching paths are covered offline.
+
+## Structured cleanup expands a spoken first name
+
+- **Symptom:** A live synthetic test changed `Ask Mira about the build` into `Ask Mira Bellamy about the build` after receiving a directory entry.
+- **Root cause:** The first directory guard checked only that the spoken first name survived; a surname could be added while satisfying that check.
+- **Fix:** Reject an introduced longer person-name form when only its shorter alias was spoken, while allowing a near-spelled surname actually present in the transcript to be corrected.
+- **Verified:** 2026-11-14: focused tests cover both rejected expansion and permitted surname correction; all six live structured-mode cases passed after the fix.
+
+## Slack user search cannot enumerate the directory
+
+- **Symptom:** An empty keyword search returned `INVALID_ARGUMENT`; a wildcard search returned no users.
+- **Root cause:** The connected Slack user-search tool is a search interface, not a workspace user-list endpoint.
+- **Fix:** Enumerate active joined channels, paginate their human member lists, and deduplicate profiles by user ID.
+  Document the resulting coverage instead of claiming to have every workspace user.
+- **Verified:** 2026-11-14: all 20 returned channels reported completed member pagination, yielding 18 unique active people.
+
 ## Captured identifier spellings are ignored or acquire a duplicated suffix
 
 - **Symptom:** A user-initiated desktop OCR test captured `SilverOtterCache` correctly, but cleanup returned "Silver Otter cache".

@@ -30,6 +30,12 @@
 # RAMBLE_GLOSSARY=1
 # RAMBLE_HINT=1
 
+# Private Slack/workspace directory, loaded separately from the handwritten glossary.
+# RAMBLE_WORKSPACE=0 disables both cleanup vocabulary and its Whisper hint.
+# RAMBLE_WORKSPACE=1
+# RAMBLE_WORKSPACE_FILE="$HOME/.ramble/workspace.json"
+# Refresh/import instructions: docs/workspace-vocabulary.md
+
 # Context from the active terminal pane or desktop conversation, never another session.
 # RAMBLE_CONTEXT=1
 # RAMBLE_CONTEXT_MESSAGES=6  # recent text blocks; AX/OCR may not expose message boundaries
